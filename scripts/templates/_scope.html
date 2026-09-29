@@ -1,0 +1,24 @@
+{# 全站范围选择条（总任务规划 P0.1）
+   竞店侧：🌐 全部竞店 → 🗺️ 各区 → 未收纳单店；自家侧：🏠 总库 → 🏪 各门店。
+   依赖路由传入 scope_bar = {"comp":[{label,url,active,title}], "own":[...]}；
+   scope_hide_comp / scope_hide_own 可选隐藏某一行（默认两行都显示）。 #}
+{% if scope_bar %}
+<div class="scope-bar">
+    {% if not scope_hide_comp and scope_bar.comp %}
+    <div class="scope-row">
+        <span class="scope-label">竞店</span>
+        {% for o in scope_bar.comp %}
+        <a class="scope-chip{% if o.active %} active{% endif %}" href="{{ o.url }}" title="{{ o.title or '' }}">{{ o.label }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% if not scope_hide_own and scope_bar.own and scope_bar.own | length > 1 %}
+    <div class="scope-row">
+        <span class="scope-label">自家</span>
+        {% for o in scope_bar.own %}
+        <a class="scope-chip{% if o.active %} active{% endif %}" href="{{ o.url }}" title="{{ o.title or '' }}">{{ o.label }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}

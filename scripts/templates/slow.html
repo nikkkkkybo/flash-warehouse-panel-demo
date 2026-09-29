@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>滞销分析 - 选品面板</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+.slow-header{background:#fff;border-radius:12px;padding:18px 24px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.slow-header h1{margin:0 0 4px;font-size:20px;}
+.slow-header .sub{color:#64748b;font-size:13px;}
+.store-tabs{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;}
+.store-tab{padding:7px 16px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;cursor:pointer;font-size:13px;color:#475569;text-decoration:none;display:inline-block;}
+.store-tab.active{background:#dc2626;color:#fff;border-color:#dc2626;}
+.store-tab:hover:not(.active){background:#fef2f2;color:#dc2626;}
+.tier-tabs{display:flex;gap:8px;margin:8px 0 14px;flex-wrap:wrap;}
+.tier-tab{padding:5px 14px;border-radius:16px;border:1px solid #e2e8f0;background:#fff;font-size:12px;color:#475569;text-decoration:none;display:inline-block;}
+.tier-tab.active{background:#1e293b;color:#fff;border-color:#1e293b;}
+.slow-table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.slow-table th{background:#f8fafc;padding:10px 12px;text-align:left;font-size:13px;color:#475569;white-space:nowrap;}
+.slow-table td{padding:8px 12px;border-top:1px solid #f1f5f9;font-size:13px;vertical-align:middle;}
+.slow-table tr:hover{background:#f8fafc;}
+.capital{font-weight:700;color:#dc2626;}
+.tier-zero{background:#fee2e2;color:#b91c1c;border-radius:10px;padding:2px 10px;font-size:11px;font-weight:600;white-space:nowrap;}
+.tier-slow{background:#ffedd5;color:#c2410c;border-radius:10px;padding:2px 10px;font-size:11px;font-weight:600;white-space:nowrap;}
+.cross-hot{color:#15803d;font-weight:600;font-size:12px;}
+.cross-cold{color:#64748b;font-weight:600;font-size:12px;}
+.cross-unk{color:#d97706;font-weight:600;font-size:12px;}
+.adv-hot{background:#ecfdf5;border:1px solid #bbf7d0;color:#065f46;border-radius:8px;padding:4px 10px;font-size:12px;display:inline-block;}
+.adv-cold{background:#f1f5f9;border:1px solid #e2e8f0;color:#475569;border-radius:8px;padding:4px 10px;font-size:12px;display:inline-block;}
+.adv-unknown{background:#fffbeb;border:1px solid #fde68a;color:#b45309;border-radius:8px;padding:4px 10px;font-size:12px;display:inline-block;}
+.price-hint{font-size:11px;color:#b91c1c;}
+.empty-tip2{padding:28px;text-align:center;color:#94a3b8;background:#fff;border:1px dashed #cbd5e1;border-radius:10px;margin-top:10px;font-size:13px;}
+    </style>
+</head>
+<body>
+<div class="container">
+    {% set active = 'analysis' %}
+    {% include "_nav.html" %}
+
+    <header class="slow-header">
+        <h1>📉 滞销分析 <span style="font-size:12px;color:#94a3b8;font-weight:400;">占压资金排序 · 竞品交叉 · 处置建议</span></h1>
+        <div class="sub">占压资金 = Σ(库存 × 采购价)。零动销=月销0；慢动销=月销低于品类中位数20%（相对口径，不冤枉长尾小件）。竞品交叉：热卖→优化/跟价；也冷→下架/清仓；未对应→先对齐。</div>
+        <div class="stats">
+            <span class="stat-item">在售SKU <strong>{{ stats.total }}</strong></span>
+            <span class="stat-item">滞销品 <strong>{{ stats.zero + stats.slow }}</strong></span>
+            <span class="stat-item">零动销 <strong>{{ stats.zero }}</strong></span>
+            <span class="stat-item">慢动销 <strong>{{ stats.slow }}</strong></span>
+            <span class="stat-item">占压资金 <strong style="color:#dc2626;">¥{{ "{:,.0f}".format(stats.capital) }}</strong></span>
+        </div>
+    </header>
+
+    <!-- 全站范围选择条（P0.1）：滞销为自家侧页面，只显示自家维度（总库/门店） -->
+    {% set scope_hide_comp = true %}
+    {% include "_scope.html" %}
+    {% if not own_stores %}
+    <div class="sub" style="font-size:12px;color:#94a3b8;margin-bottom:8px;">（未导入门店在售数据，当前为总库口径。导入自家门店表后可按店分析。）</div>
+    {% endif %}
+
+    <div class="tier-tabs">
+        <a class="tier-tab {% if tier == 'all' %}active{% endif %}" href="/slow?own_store={{ current_store | urlencode }}&tier=all">全部滞销（{{ stats.zero + stats.slow }}）</a>
+        <a class="tier-tab {% if tier == 'zero' %}active{% endif %}" href="/slow?own_store={{ current_store | urlencode }}&tier=zero">零动销（{{ stats.zero }}）</a>
+        <a class="tier-tab {% if tier == 'slow' %}active{% endif %}" href="/slow?own_store={{ current_store | urlencode }}&tier=slow">慢动销（{{ stats.slow }}）</a>
+    </div>
+
+    {% if items %}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:12px;color:#64748b;">
+        <span>竞品热卖 <b class="cross-hot">{{ stats.hot }}</b></span> ·
+        <span>竞品也冷 <b class="cross-cold">{{ stats.cold }}</b></span> ·
+        <span>未对应 <b class="cross-unk">{{ stats.unknown }}</b></span>
+    </div>
+    <table class="slow-table">
+        <thead>
+            <tr>
+                <th style="width:40px;">#</th>
+                <th>品名</th>
+                <th>品类</th>
+                <th>规格</th>
+                <th>月销</th>
+                <th>售价</th>
+                <th>库存</th>
+                <th>占压资金</th>
+                <th>层级</th>
+                <th>竞品交叉</th>
+                <th style="min-width:220px;">处置建议</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in items %}
+            <tr>
+                <td style="color:#94a3b8;">{{ loop.index }}</td>
+                <td>
+                    <a href="/top50?q={{ i.品名 | urlencode }}" style="color:#0f172a;text-decoration:none;" title="到销量前50搜该品（找对应/做匹配）">{{ i.品名 }}</a>
+                    <div style="font-size:10px;color:#cbd5e1;">SPU {{ i.SPUID }}</div>
+                </td>
+                <td style="font-size:12px;color:#64748b;">{{ i.品类 }}</td>
+                <td>{{ i.规格数 }}档</td>
+                <td><b style="color:{{ '#b91c1c' if i.月销 == 0 else '#c2410c' }};">{{ i.月销 | int }}</b></td>
+                <td>¥{{ i.售价 }}</td>
+                <td>{{ i.库存 | int }}</td>
+                <td class="capital">¥{{ "{:,.0f}".format(i.占压资金) }}</td>
+                <td><span class="{{ 'tier-zero' if i.层级 == '零动销' else 'tier-slow' }}">{{ i.层级 }}</span></td>
+                <td>
+                    {% if i.竞品档位 == '竞品热卖' %}
+                    <span class="cross-hot">热卖 月售{{ i.竞品月售 | int }}（{{ i.竞品店数 }}店）</span>
+                    {% if i.价差提示 is not none %}
+                    <div class="price-hint">{% if i.价差提示 > 0 %}比竞品贵 {{ i.价差提示 }} 元{% else %}比竞品便宜 {{ -i.价差提示 }} 元{% endif %}</div>
+                    {% endif %}
+                    {% elif i.竞品档位 == '竞品也冷' %}
+                    <span class="cross-cold">也冷 月售{{ i.竞品月售 | int }}（{{ i.竞品店数 }}店）</span>
+                    {% else %}
+                    <span class="cross-unk">未对应</span>
+                    {% endif %}
+                </td>
+                <td><span class="{{ i.建议样式 }}">{{ i.建议 }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div class="sub" style="margin-top:8px;font-size:12px;color:#94a3b8;">
+        说明：月销量为最近一次导入的快照（单点），连续多期零动销才是真滞销——每次导入自家表都会积累销量快照。点击品名可跳到「销量前50」搜该品完成对应。
+    </div>
+    {% else %}
+    <div class="empty-tip2">
+        {% if stats.total == 0 %}
+        无在售数据（或所选门店无在售品）。
+        {% else %}
+        🎉 当前口径下没有滞销品（零动销与慢动销均为 0）。
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+</body>
+</html>

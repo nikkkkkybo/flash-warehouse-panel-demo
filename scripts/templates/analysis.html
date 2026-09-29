@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>选店分析 - 选择竞店参与对比</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .analysis-header { background:#fff;border-radius:10px;padding:18px 24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+        .analysis-header h1 { margin:0 0 6px; font-size:20px; }
+        .analysis-header .sub { color:#64748b; font-size:13px; }
+        .shop-table { width:100%; border-collapse:collapse; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+        .shop-table th { background:#f8fafc; padding:10px 14px; text-align:left; font-size:13px; color:#475569; }
+        .shop-table td { padding:10px 14px; border-top:1px solid #f1f5f9; font-size:13px; }
+        .shop-table tr:hover { background:#f8fafc; }
+        .shop-check { width:40px; }
+        .shop-pending { color:#1e40af; font-weight:600; }
+        .shop-pending.zero { color:#94a3b8; font-weight:400; }
+        .run-bar { margin:16px 0; display:flex; gap:12px; align-items:center; }
+        .result-box { background:#fff; border-radius:10px; padding:18px 24px; box-shadow:0 2px 8px rgba(0,0,0,0.06); margin-top:16px; display:none; }
+        .result-box.show { display:block; }
+        .overview-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:10px; margin-top:12px; }
+        .ov-item { background:#f8fafc; border-radius:8px; padding:10px 14px; }
+        .ov-item .k { color:#64748b; font-size:12px; }
+        .ov-item .v { font-size:18px; font-weight:700; color:#1e293b; margin-top:4px; }
+        .report-links { margin-top:12px; color:#1e40af; font-size:13px; }
+        .run-loading { color:#1e40af; font-size:13px; }
+        /* 品类诊断卡片墙 */
+        .cat-card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
+        .cat-card { background:#fff; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.06); overflow:hidden; cursor:pointer; transition:box-shadow 0.2s,transform 0.15s; border-left:5px solid #ccc; position:relative; }
+        .cat-card:hover { box-shadow:0 4px 16px rgba(0,0,0,0.12); transform:translateY(-1px); }
+        .cat-card.green  { border-left-color:#10b981; }
+        .cat-card.yellow { border-left-color:#f59e0b; }
+        .cat-card.red    { border-left-color:#ef4444; }
+        .cat-card-front { padding:14px 16px; }
+        .cat-card-front .cat-name { font-weight:700; font-size:15px; color:#1e293b; margin-bottom:4px; }
+        .cat-card-front .cat-score { font-size:28px; font-weight:800; line-height:1; }
+        .cat-card-front .cat-score.green  { color:#10b981; }
+        .cat-card-front .cat-score.yellow { color:#f59e0b; }
+        .cat-card-front .cat-score.red    { color:#ef4444; }
+        .cat-card-front .cat-metric { font-size:12px; color:#64748b; line-height:1.5; margin-top:6px; }
+        .cat-card-front .cat-reliability { display:inline-block; font-size:11px; padding:1px 6px; border-radius:4px; margin-top:4px; }
+        .cat-reliability.high   { background:#dcfce7; color:#166534; }
+        .cat-reliability.medium { background:#fef3c7; color:#92400e; }
+        .cat-reliability.low    { background:#fee2e2; color:#991b1b; }
+        .cat-card-body { display:none; padding:0 16px 14px; border-top:1px solid #f1f5f9; font-size:13px; line-height:1.8; color:#334155; }
+        .cat-card.expanded .cat-card-body { display:block; }
+        .cat-card-body .diag-text { background:#f8fafc; padding:10px 12px; border-radius:8px; margin:10px 0; }
+        .cat-card-body .action-item { padding:6px 10px; margin:4px 0; background:#eff6ff; border-radius:6px; border-left:3px solid #3b82f6; }
+        .cat-card-body .action-link { color:#2563eb; text-decoration:none; margin-left:6px; font-size:12px; }
+        .cat-card-body .action-link:hover { text-decoration:underline; }
+        .cat-card-body .hot-item { font-size:12px; color:#64748b; padding:2px 0; }
+        .cat-filter-bar { display:flex; gap:8px; align-items:center; margin-top:12px; flex-wrap:wrap; }
+        .cat-filter-btn { padding:5px 14px; border-radius:6px; border:1px solid #e2e8f0; background:#fff; cursor:pointer; font-size:13px; transition:all 0.15s; }
+        .cat-filter-btn.active { background:#1e40af; color:#fff; border-color:#1e40af; }
+        .cat-sort-select { padding:5px 10px; border-radius:6px; border:1px solid #e2e8f0; font-size:13px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    {% set active = 'analysis' %}
+    {% include "_nav.html" %}
+
+    <div class="analysis-header">
+        <h1>📊 拿结论（选店分析）</h1>
+        <div class="sub">勾选参与对比的竞店（可只选几家做定向对比），运行后价格矩阵、热销、缺口、品类等报告全部按所选店计算。
+            其他结论入口：📈 <a href="/">首页·榜单（机会/防守/缺口）</a> · 📉 <a href="/slow">滞销分析（自家占压资金）</a></div>
+    </div>
+
+    <div id="shopListWrap">
+        <table class="shop-table">
+            <thead>
+                <tr>
+                    <th class="shop-check"><input type="checkbox" id="checkAll" checked onchange="toggleAll(this)"></th>
+                    <th>竞店名称</th>
+                    <th>待确认</th>
+                    <th>标准条码率</th>
+                    <th>类目3率</th>
+                    <th>质量分</th>
+                    <th>建议优先级</th>
+                </tr>
+            </thead>
+            <tbody id="shopBody"></tbody>
+        </table>
+    </div>
+
+    <div class="run-bar">
+        <button class="btn btn-success" onclick="saveAndRun()">▶ 保存选择并运行分析</button>
+        <button class="btn" onclick="saveOnly()">仅保存选择</button>
+        <span id="runStatus" class="run-loading"></span>
+    </div>
+
+    <div id="resultBox" class="result-box">
+        <h3 id="resultTitle" style="margin:0 0 4px;">分析完成</h3>
+        <div id="resultMsg" style="color:#64748b;font-size:13px;"></div>
+        <div id="overviewGrid" class="overview-grid"></div>
+        <div id="reportLinks" class="report-links"></div>
+    </div>
+
+    <!-- AI 经营分析区 -->
+    <div class="analysis-header" style="margin-top:20px;">
+        <h1>🤖 分层 AI 分析（类 / 品 / 规格）</h1>
+        <div class="sub" style="line-height:2;">
+            · <b>类层（类目）</b>：类目映射建议 / 类目缺口 / 价格带 / 竞争度 —— 下方「类目 AI 分析」<br>
+            · <b>品层（SPU）</b>：品级同品判断（人工确认页/详情页「🤖 大模型辅助判断」）、品级引进建议（本页 AI 经营分析的热销/缺口板块）<br>
+            · <b>规格层（SKU）</b>：逐品建议（定价/差距/销量/防守/毛利）—— 「已对齐建议」页
+        </div>
+        <div style="margin-top:14px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+            <button class="btn" onclick="catAnalyze()">🗂 类目 AI 分析（当前勾选店铺）</button>
+            <span id="catStatus" style="font-size:13px;color:#1e40af;"></span>
+        </div>
+        <div id="catReportBox" style="display:none;margin-top:14px;padding:16px 20px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;line-height:1.9;font-size:14px;"></div>
+    </div>
+
+    <!-- 洞察台账（规则层发现 + 可复算凭据 + 处理状态） -->
+    <div class="analysis-header" style="margin-top:20px;" id="insightPanel">
+        <h1>🧠 洞察台账（全局问题 + 细节可疑）</h1>
+        <div class="sub" style="line-height:1.9;">
+            发现环节由<b>程序按统计规则跑全量数据</b>（0 元、可复算、带来源行凭据）；大模型只负责解释与把动作说具体，
+            <b>不给任何新数字</b>。每条都写清"几号的数据、什么口径、算式是什么"，点开「看来源」能回到具体行。
+        </div>
+        <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <button class="btn btn-sm" onclick="insRefresh()">🔄 重新扫描（不花钱）</button>
+            <button class="btn btn-sm" onclick="insInterpret()" id="insAiBtn">🤖 AI 解读这批（约 ¥0.03）</button>
+            <a class="btn btn-sm" href="/api/insight/brief" target="_blank">📄 老板版摘要</a>
+            <a class="btn btn-sm btn-green" href="/export/insight.xlsx">📥 导出台账 Excel</a>
+            <button class="btn btn-sm" onclick="insDeep(false)">📅 本周深报（0 元）</button>
+            <button class="btn btn-sm" onclick="insDeep(true)">📅 深报·含AI解读（约 ¥0.03）</button>
+            <span id="insStatus" style="font-size:12.5px;color:#1e40af;"></span>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:#475569;">
+            层级：<select id="insLayer" onchange="insLoad()">
+                <option value="">全部</option><option value="全局">🌐 全局（人眼看不出）</option>
+                <option value="细节">🔍 细节（容易被忽略）</option></select>
+            状态：<select id="insStatus2" onchange="insLoad()">
+                <option value="">全部</option><option value="new">未处理</option>
+                <option value="adopted">已采纳</option><option value="done">已做</option>
+                <option value="ignored">已忽略</option></select>
+            <label><input type="checkbox" id="insGone" onchange="insLoad()"> 含本期已消失</label>
+            <span id="insCaliber" style="color:#94a3b8;"></span>
+        </div>
+        <div id="insList" style="margin-top:12px;"></div>
+
+        <!-- 采纳追踪（M6·3.3）：建议 → 人做了什么 → 30 天回看 -->
+        <div style="margin-top:18px;padding-top:12px;border-top:1px dashed #cbd5e1;">
+            <div style="font-weight:600;font-size:14px;">📌 采纳追踪</div>
+            <div style="font-size:12.5px;color:#64748b;margin-top:4px;">
+                每条建议都有流水账：采纳/已做/忽略全部落 <code>采纳记录.jsonl</code>；
+                采纳满 30 天自动进"待回看"，效果比对依赖竞品第二期观测。
+            </div>
+            <div id="adoptBox" style="margin-top:8px;font-size:12.5px;color:#64748b;">加载中…</div>
+        </div>
+    </div>
+
+    <!-- 品类诊断卡片墙 -->
+    <div class="analysis-header" style="margin-top:20px;">
+        <h1>🏥 品类诊断卡片墙</h1>
+        <div class="sub">
+            按品类聚合竞品 + 对齐数据，AI 为每个品类给出"体检诊断 + 具体处方"。
+            <span style="color:#10b981;">■ 健康(≥65)</span>
+            <span style="color:#f59e0b;">■ 需关注(35-64)</span>
+            <span style="color:#ef4444;">■ 需行动(&lt;35)</span>
+        </div>
+        <div style="margin-top:10px;">
+            <button class="btn btn-sm" onclick="toggleAiConfig()">⚙ 配置 AI 接口</button>
+            <span id="aiConfigStatus" style="font-size:12px;color:#64748b;margin-left:8px;"></span>
+        </div>
+        <div id="aiConfigBox" style="display:none;margin-top:12px;padding:12px;background:#f8fafc;border-radius:8px;">
+            <input type="password" id="aiKeyInput" placeholder="粘贴 DeepSeek API key（sk-...）" style="width:380px;padding:8px;border:1px solid #e2e8f0;border-radius:8px;">
+            <button class="btn btn-sm" onclick="saveAiConfig()">保存 key</button>
+            <div style="font-size:12px;color:#94a3b8;margin-top:6px;">key 只存在本机 config/ai_config.yaml。没有 key 可去 deepseek.com 注册。</div>
+        </div>
+        <div style="margin-top:14px;">
+            <button class="btn btn-success" onclick="catDiagGenerate()" id="catDiagBtn">🏥 生成品类诊断</button>
+            <button class="btn btn-sm" onclick="catDiagNoAi()" title="只看本地数据，不调 AI（秒级出结果）">仅本地数据</button>
+            <span id="catDiagStatus" style="font-size:13px;color:#1e40af;margin-left:10px;"></span>
+        </div>
+        <!-- 筛选/排序栏 -->
+        <div class="cat-filter-bar" id="catFilterBar" style="display:none;">
+            <button class="cat-filter-btn active" onclick="catFilter('all',this)">全部</button>
+            <button class="cat-filter-btn" onclick="catFilter('red',this)">🔴 需行动</button>
+            <button class="cat-filter-btn" onclick="catFilter('yellow',this)">🟡 需关注</button>
+            <button class="cat-filter-btn" onclick="catFilter('green',this)">🟢 健康</button>
+            <span style="color:#94a3b8;font-size:12px;">|</span>
+            <label style="font-size:13px;color:#64748b;">排序：
+                <select class="cat-sort-select" id="catSortSel" onchange="catResort()">
+                    <option value="problem">问题优先（红→绿）</option>
+                    <option value="sales">热点优先（月售降序）</option>
+                    <option value="name">品类名</option>
+                </select>
+            </label>
+        </div>
+        <!-- 汇总栏 -->
+        <div id="catDiagSummary" style="display:none;margin-top:12px;" class="overview-grid"></div>
+        <!-- 卡片网格 -->
+        <div id="catDiagGrid" style="display:none;margin-top:16px;" class="cat-card-grid"></div>
+    </div>
+</div>
+
+<script>
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function loadShops() {
+    fetch('/api/analysis/shops')
+        .then(function(r){ return r.json(); })
+        .then(function(data) {
+            const body = document.getElementById('shopBody');
+            let html = '';
+            data.shops.forEach(function(s) {
+                const pendingCls = (s.pending === 0) ? ' shop-pending zero' : ' shop-pending';
+                html += '<tr>';
+                html += '<td class="shop-check"><input type="checkbox" class="shop-sel" data-shop="' + escapeHtml(s.name) + '"' + (s.selected ? ' checked' : '') + '></td>';
+                html += '<td><b>' + escapeHtml(s.name) + '</b></td>';
+                html += '<td class="' + pendingCls + '">' + s.pending + ' 待确认</td>';
+                html += '<td>' + escapeHtml(s['标准条码率%'] || '-') + '%</td>';
+                html += '<td>' + escapeHtml(s['类目3率%'] || '-') + '%</td>';
+                html += '<td>' + escapeHtml(s['质量分'] || '-') + '</td>';
+                html += '<td>' + escapeHtml(s['建议优先级'] || '-') + '</td>';
+                html += '</tr>';
+            });
+            body.innerHTML = html;
+        })
+        .catch(function(err) {
+            document.getElementById('shopBody').innerHTML = '<tr><td colspan="7">加载失败: ' + escapeHtml(err.message) + '</td></tr>';
+        });
+}
+
+function getSelected() {
+    const shops = [];
+    document.querySelectorAll('.shop-sel:checked').forEach(function(cb) {
+        shops.push(cb.getAttribute('data-shop'));
+    });
+    return shops;
+}
+
+function toggleAll(ck) {
+    document.querySelectorAll('.shop-sel').forEach(function(cb) { cb.checked = ck.checked; });
+}
+
+function saveOnly() {
+    const shops = getSelected();
+    fetch('/api/analysis/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shops: shops})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ document.getElementById('runStatus').textContent = d.ok ? d.msg : d.msg; })
+    .catch(function(e){ document.getElementById('runStatus').textContent = '保存失败: ' + e.message; });
+}
+
+function saveAndRun() {
+    const shops = getSelected();
+    if (!shops.length) { alert('请至少选择一家店'); return; }
+    const status = document.getElementById('runStatus');
+    const box = document.getElementById('resultBox');
+    status.textContent = '正在运行分析（约1-3分钟），请稍候...';
+    box.classList.remove('show');
+
+    fetch('/api/analysis/run', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shops: shops})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        status.textContent = '';
+        if (!d.ok) { alert('分析失败: ' + d.msg); return; }
+        box.classList.add('show');
+        document.getElementById('resultTitle').textContent = d.msg;
+        document.getElementById('resultMsg').textContent = '报告已按所选 ' + shops.length + ' 家店重新计算：';
+        const grid = document.getElementById('overviewGrid');
+        let ghtml = '';
+        (d.overview || []).forEach(function(o) {
+            ghtml += '<div class="ov-item"><div class="k">' + escapeHtml(o['指标']) + '</div><div class="v">' + escapeHtml(o['数值']) + '</div></div>';
+        });
+        grid.innerHTML = ghtml;
+        let rh = '报告文件：';
+        (d.reports || []).forEach(function(f) { rh += escapeHtml(f) + '　'; });
+        document.getElementById('reportLinks').textContent = rh;
+    })
+    .catch(function(e) {
+        status.textContent = '';
+        alert('请求出错: ' + e.message);
+    });
+}
+
+window.onload = function() {
+    loadShops();
+    loadAiConfigStatus();
+};
+
+// ============ 品类诊断卡片墙 ============
+var _catCards = [];      // 当前卡片数据缓存
+var _catFilter = 'all';  // 当前筛选颜色
+var _catSort = 'problem'; // 当前排序方式
+
+function catDiagGenerate() { _catDiagRun(true); }
+function catDiagNoAi()     { _catDiagRun(false); }
+
+function _catDiagRun(useAi) {
+    var shops = getSelected();
+    if (!shops.length) { alert('请先在店铺列表勾选至少一家店'); return; }
+    var btn = document.getElementById('catDiagBtn');
+    var status = document.getElementById('catDiagStatus');
+    btn.disabled = true;
+    status.textContent = useAi ? '正在聚合数据并调用 AI 诊断（约 30-60 秒）...' : '正在聚合品类数据...';
+    document.getElementById('catDiagGrid').style.display = 'none';
+    document.getElementById('catDiagSummary').style.display = 'none';
+    document.getElementById('catFilterBar').style.display = 'none';
+
+    fetch('/api/ai/category_diag', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shops: shops, use_ai: useAi})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        btn.disabled = false;
+        status.textContent = '';
+        if (!d.ok) { alert('生成失败: ' + d.msg); return; }
+        status.textContent = d.msg;
+        _catCards = d.cards;
+        _catFilter = 'all';
+        // 重置筛选按钮状态
+        document.querySelectorAll('.cat-filter-btn').forEach(function(b){ b.classList.remove('active'); });
+        document.querySelector('.cat-filter-btn').classList.add('active');
+        renderCatCards(d.cards, d.summary);
+    })
+    .catch(function(e) {
+        btn.disabled = false;
+        status.textContent = '';
+        alert('请求出错: ' + e.message);
+    });
+}
+
+function renderCatCards(cards, summary) {
+    // 汇总栏
+    var sumEl = document.getElementById('catDiagSummary');
+    sumEl.style.display = 'grid';
+    sumEl.innerHTML =
+        '<div class="ov-item"><div class="k">品类数</div><div class="v">' + summary.total_categories + '</div></div>' +
+        '<div class="ov-item"><div class="k" style="color:#10b981">健康</div><div class="v" style="color:#10b981">' + summary.green_count + '</div></div>' +
+        '<div class="ov-item"><div class="k" style="color:#f59e0b">需关注</div><div class="v" style="color:#f59e0b">' + summary.yellow_count + '</div></div>' +
+        '<div class="ov-item"><div class="k" style="color:#ef4444">需行动</div><div class="v" style="color:#ef4444">' + summary.red_count + '</div></div>';
+
+    document.getElementById('catFilterBar').style.display = 'flex';
+    _renderCardGrid(cards);
+}
+
+function _renderCardGrid(cards) {
+    // 排序
+    var colorOrder = {red: 0, yellow: 1, green: 2};
+    var sortMode = document.getElementById('catSortSel').value;
+    var sorted = cards.slice();
+    if (sortMode === 'problem') {
+        sorted.sort(function(a, b) {
+            var ca = colorOrder[a.color] || 1, cb = colorOrder[b.color] || 1;
+            if (ca !== cb) return ca - cb;
+            return a.health_score - b.health_score;
+        });
+    } else if (sortMode === 'sales') {
+        sorted.sort(function(a, b) { return (b.comp_sales_total || 0) - (a.comp_sales_total || 0); });
+    } else {
+        sorted.sort(function(a, b) { return a.cat.localeCompare(b.cat, 'zh'); });
+    }
+
+    // 筛选
+    if (_catFilter !== 'all') {
+        sorted = sorted.filter(function(c) { return c.color === _catFilter; });
+    }
+
+    var grid = document.getElementById('catDiagGrid');
+    grid.style.display = 'grid';
+    if (!sorted.length) {
+        grid.innerHTML = '<div style="color:#94a3b8;font-size:14px;padding:20px;">无匹配卡片</div>';
+        return;
+    }
+
+    var html = '';
+    sorted.forEach(function(c) {
+        var relLabel = {high:'数据可靠', medium:'数据一般', low:'数据较少'}[c.data_reliability] || '数据较少';
+        var tooltip = '竞品' + c.comp_product_count + '品 / 自家' + c.own_product_count + '品 / 对齐' + c.aligned_count + '品' +
+            (c.price_diff_pct !== null && c.price_diff_pct !== undefined ? ' / 价差' + c.price_diff_pct + '%' : '');
+        html += '<div class="cat-card ' + c.color + '" onclick="toggleCard(this)" data-color="' + c.color + '">';
+        // 卡面
+        html += '<div class="cat-card-front">';
+        html += '<div class="cat-name">' + escapeHtml(c.cat) + '</div>';
+        html += '<div class="cat-score ' + c.color + '">' + c.health_score + '</div>';
+        html += '<div class="cat-metric" title="' + escapeHtml(tooltip) + '">' + escapeHtml(c.key_metric) + '</div>';
+        html += '<span class="cat-reliability ' + c.data_reliability + '">' + relLabel + '</span>';
+        html += '</div>';
+        // 展开体
+        html += '<div class="cat-card-body">';
+        if (c.diagnosis) {
+            html += '<div class="diag-text">' + escapeHtml(c.diagnosis) + '</div>';
+        }
+        if (c.actions && c.actions.length) {
+            html += '<div style="font-weight:600;margin:8px 0 4px;">具体建议：</div>';
+            c.actions.forEach(function(a) {
+                var text = typeof a === 'string' ? a : (a.text || '');
+                var link = typeof a === 'object' ? a.link : null;
+                html += '<div class="action-item">' + escapeHtml(text);
+                if (link && link.type === 'comp_detail' && link.shop && link.sku) {
+                    html += '<a class="action-link" href="/comp_detail?shop=' + encodeURIComponent(link.shop) + '&sku=' + encodeURIComponent(link.sku) + '" target="_blank" onclick="event.stopPropagation()">查看详情 ↗</a>';
+                } else if (link && link.type === 'own_item' && link.sku) {
+                    html += '<a class="action-link" href="/item/' + encodeURIComponent(link.sku) + '" target="_blank" onclick="event.stopPropagation()">查看自家品 ↗</a>';
+                }
+                html += '</div>';
+            });
+        }
+        if (c.hot_items && c.hot_items.length) {
+            html += '<div style="font-weight:600;margin:8px 0 4px;">竞品热销：</div>';
+            c.hot_items.forEach(function(h) {
+                html += '<div class="hot-item">· ';
+                if (h.shop && h.sku) {
+                    html += '<a href="/comp_detail?shop=' + encodeURIComponent(h.shop) + '&sku=' + encodeURIComponent(h.sku) + '" target="_blank" onclick="event.stopPropagation()" style="color:#2563eb;text-decoration:none;">' + escapeHtml(h.name) + '</a>';
+                } else {
+                    html += escapeHtml(h.name);
+                }
+                html += '（月售' + h.sales + '，' + h.price + '元）</div>';
+            });
+        }
+        html += '<div style="margin-top:8px;font-size:11px;color:#94a3b8;">' + tooltip + '</div>';
+        html += '</div></div>';
+    });
+    grid.innerHTML = html;
+}
+
+function toggleCard(el) { el.classList.toggle('expanded'); }
+
+function catFilter(color, btnEl) {
+    _catFilter = color;
+    document.querySelectorAll('.cat-filter-btn').forEach(function(b){ b.classList.remove('active'); });
+    btnEl.classList.add('active');
+    _renderCardGrid(_catCards);
+}
+
+function catResort() { _renderCardGrid(_catCards); }
+
+// ============ AI 配置 ============
+function loadAiConfigStatus() {
+    fetch('/api/ai/config/status')
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+            const el = document.getElementById('aiConfigStatus');
+            if (d.ok && d.configured) {
+                el.textContent = '已配置（' + d.model + '）';
+                el.style.color = '#10b981';
+            } else {
+                el.textContent = '未配置 key（生成前需配置）';
+                el.style.color = '#dc2626';
+            }
+        })
+        .catch(function(){});
+}
+
+function toggleAiConfig() {
+    const box = document.getElementById('aiConfigBox');
+    box.style.display = (box.style.display === 'none') ? 'block' : 'none';
+}
+
+function saveAiConfig() {
+    const key = document.getElementById('aiKeyInput').value.trim();
+    if (!key) { alert('请先粘贴 API key'); return; }
+    fetch('/api/ai/config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({api_key: key})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        alert(d.ok ? d.msg : d.msg);
+        if (d.ok) { document.getElementById('aiKeyInput').value = ''; loadAiConfigStatus(); }
+    })
+    .catch(function(e){ alert('保存失败: ' + e.message); });
+}
+
+// Markdown 轻量渲染（标题/加粗/列表/分隔线/引用）
+function renderMd(md) {
+    if (!md) return '';
+    const lines = String(md).split('\n');
+    let html = '';
+    lines.forEach(function(l) {
+        let t = l.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        t = t.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>');
+        t = t.replace(/`(.+?)`/g, '<code>$1</code>');
+        if (/^### /.test(t)) { html += '<h4 style="margin:14px 0 6px;color:#1e40af;">' + t.slice(4) + '</h4>'; }
+        else if (/^## /.test(t)) { html += '<h3 style="margin:16px 0 6px;color:#1e3a8a;">' + t.slice(3) + '</h3>'; }
+        else if (/^# /.test(t)) { html += '<h2 style="margin:16px 0 6px;color:#0f172a;">' + t.slice(2) + '</h2>'; }
+        else if (/^- /.test(t)) { html += '<div style="padding-left:14px;position:relative;">' + t.replace(/^- /, '') + '</div>'; }
+        else if (/^\d+\. /.test(t)) { html += '<div style="padding-left:14px;">' + t + '</div>'; }
+        else if (/^---$/.test(t.trim())) { html += '<hr style="border:none;border-top:1px solid #e2e8f0;margin:10px 0;">'; }
+        else if (t.trim() === '') { html += '<div style="height:6px;"></div>'; }
+        else { html += '<div style="margin:3px 0;">' + t + '</div>'; }
+    });
+    return html;
+}
+
+// 类目 AI 分析（类层）
+function catAnalyze() {
+    const shops = getSelected();
+    if (!shops.length) { alert('请先勾选至少一家店'); return; }
+    const st = document.getElementById('catStatus');
+    st.textContent = '正在生成（约10-30秒）...';
+    fetch('/api/ai/category', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shops: shops})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        st.textContent = '';
+        if (!d.ok) { alert('生成失败: ' + d.msg); return; }
+        const box = document.getElementById('catReportBox');
+        box.style.display = 'block';
+        box.innerHTML = '<div style="font-weight:700;margin-bottom:8px;">🗂 类目 AI 分析结果</div>' + renderMd(d.report);
+    })
+    .catch(function(e){ st.textContent = ''; alert('请求出错: ' + e.message); });
+}
+</script>
+<script>
+/* ── 洞察台账（规则层发现 + 可复算凭据 + 处理状态）── */
+(function () {
+  var esc = function (s) {
+    return String(s === null || s === undefined ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  };
+  var ST = { new: '未处理', adopted: '已采纳', done: '已做', ignored: '已忽略' };
+  /* 探测器自述：出多少条 / 为什么没出——静默为空的探测器等于摆设，必须显示出来 */
+  window.insCovText = function (cov) {
+    if (!cov) return '';
+    var fired = 0, blocked = [];
+    Object.keys(cov).forEach(function (k) {
+      fired += cov[k].fired;
+      if (!cov[k].fired && (cov[k].blocked || []).length) blocked.push(k + '（' + cov[k].blocked[0] + '）');
+    });
+    return '探测出 ' + fired + ' 条' + (blocked.length ? '；未启用：' + blocked.join('、') : '');
+  };
+  var poll = null;
+
+  function srcHref(refs, scope) {
+    refs = refs || [];
+    for (var i = 0; i < refs.length; i++) {
+      var r = refs[i], id = ((r.ids || [])[0] || '').trim();
+      if (!id) continue;
+      if (r.kind === '竞品SKU' || r.kind === '竞品品' || r.kind === '品组')
+        return '/browse?q=' + encodeURIComponent(id) + (r.shop ? '&shop=' + encodeURIComponent(r.shop) : '');
+      if (r.kind === '自家SKU') return '/reverse?q=' + encodeURIComponent(id);
+      if (r.kind === '类目') return '/browse?cat=' + encodeURIComponent(id);
+    }
+    return scope ? '/browse?shop=' + encodeURIComponent(scope) : '/browse';
+  }
+
+  function card(it) {
+    var met = it.metrics || {}, ev = [];
+    Object.keys(met).forEach(function (k) { if (k !== '算式') ev.push(k + '=' + met[k]); });
+    var gone = it.present === false ? '<span style="color:#94a3b8;font-size:11px;">｜本期数据已不再出现</span>' : '';
+    var per = (it.periods > 1) ? '<span style="color:#b45309;font-size:11px;">｜连续 ' + it.periods + ' 期未处理</span>' : '';
+    var ai = it.ai_note ? '<div style="margin-top:6px;font-size:12.5px;color:#4338ca;background:#eef2ff;border-radius:6px;padding:6px 8px;">🤖 '
+                 + esc(it.ai_note) + (it.ai_action ? '　→ <b>' + esc(it.ai_action) + '</b>' : '') + '</div>' : '';
+    return '<div style="border:1px solid #e2e8f0;border-left:3px solid ' + (it.layer === '全局' ? '#2563eb' : '#f59e0b')
+      + ';border-radius:8px;padding:10px 12px;margin-bottom:9px;background:#fff;">'
+      + '<div style="font-size:13.5px;font-weight:600;">'
+      + (it.layer === '全局' ? '🌐 全局' : '🔍 细节') + '　' + esc(it.title) + gone + per + '</div>'
+      + '<div style="font-size:12.5px;color:#475569;margin-top:5px;">' + esc(ev.slice(0, 6).join('；')) + '</div>'
+      + (met['算式'] ? '<details style="margin-top:4px;"><summary style="font-size:11.5px;color:#94a3b8;cursor:pointer;">这条是怎么算出来的</summary>'
+        + '<div style="font-size:11.5px;color:#64748b;margin-top:3px;">' + esc(met['算式'])
+        + '<br>完整凭据：' + esc(JSON.stringify(met)) + '</div></details>' : '')
+      + '<div style="font-size:12.5px;color:#065f46;margin-top:5px;">▶ 动作：' + esc(it.hint || '') + '</div>'
+      + ai
+      + '<div style="margin-top:7px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;">'
+      + '<span style="color:#94a3b8;">' + esc(it.scope || '') + ' · ' + esc(it.detector || '') + ' · 状态：' + (ST[it.status] || it.status) + '</span>'
+      + '<a href="' + esc(srcHref(it.refs, it.scope)) + '" style="color:#2563eb;">看来源 →</a>'
+      + '<a href="javascript:void(0)" onclick="insSet(\'' + esc(it.key).replace(/'/g, "\\'") + '\',\'adopted\')" style="color:#059669;">采纳</a>'
+      + '<a href="javascript:void(0)" onclick="insSet(\'' + esc(it.key).replace(/'/g, "\\'") + '\',\'done\')" style="color:#059669;">已做</a>'
+      + '<a href="javascript:void(0)" onclick="insSet(\'' + esc(it.key).replace(/'/g, "\\'") + '\',\'ignored\')" style="color:#94a3b8;">忽略</a>'
+      + '</div></div>';
+  }
+
+  window.insLoad = function () {
+    var p = '/api/insight/list?layer=' + encodeURIComponent(document.getElementById('insLayer').value)
+          + '&status=' + encodeURIComponent(document.getElementById('insStatus2').value)
+          + '&gone=' + (document.getElementById('insGone').checked ? '1' : '0');
+    fetch(p).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.ok) { document.getElementById('insList').innerHTML = '<div style="color:#b91c1c;">' + esc(d.msg) + '</div>'; return; }
+      document.getElementById('insCaliber').textContent = (d.caliber || '') + (d.updated ? '　｜　台账更新 ' + d.updated : '');
+      var box = document.getElementById('insList');
+      if (!d.items.length) {
+        box.innerHTML = '<div style="padding:16px;background:#fff;border:1px dashed #cbd5e1;border-radius:8px;color:#64748b;font-size:13px;">'
+          + '台账为空。点「重新扫描」跑一次规则探测（不花钱，约 10-40 秒）。<br>'
+          + '宁缺毋滥：数据里没有值得马上动手的规律时，这里就应该是空的。</div>';
+        return;
+      }
+      box.innerHTML = d.items.map(card).join('');
+    }).catch(function (e) { document.getElementById('insList').innerHTML = '<div style="color:#b91c1c;">加载失败 ' + esc(e) + '</div>'; });
+  };
+
+  function adoptLoad() {
+    fetch('/api/insight/adopt').then(function (r) { return r.json(); }).then(function (d) {
+      var s = d.stats || {}, box = document.getElementById('adoptBox');
+      var chips = '<span style="margin-right:14px;">流水 ' + (s.total || 0) + ' 条</span>'
+        + '<span style="margin-right:14px;color:#2563eb;">采纳 ' + (s.adopted || 0) + '</span>'
+        + '<span style="margin-right:14px;color:#059669;">已做 ' + (s.done || 0) + '</span>'
+        + '<span style="margin-right:14px;color:#94a3b8;">忽略 ' + (s.ignored || 0) + '</span>';
+      var pend = d.pending_review || [];
+      var pendHtml = pend.length
+        ? ('<div style="margin-top:6px;">⏰ <b>待回看 ' + pend.length + ' 条</b>（采纳满 30 天）：<ol style="margin:4px 0 0 18px;">'
+          + pend.slice(0, 6).map(function (p) {
+              return '<li style="color:#92400e;">' + esc(String((p.obj && p.obj.subject) || p.obj || p.key).slice(0, 40))
+                + ' · 已采纳 ' + p.days + ' 天 · ' + esc(p.data_note) + '</li>';
+            }).join('') + '</ol></div>')
+        : '<div style="margin-top:6px;">暂无到期待回看条目</div>';
+      box.innerHTML = '<div>' + chips + '</div>' + pendHtml;
+    }).catch(function (e) { document.getElementById('adoptBox').textContent = '采纳追踪加载失败'; });
+  }
+  window.insDeep = function (withAi) {
+    if (withAi && !confirm('含 AI 解读的深报约 ¥0.03、15-40 秒，继续？')) return;
+    var st = document.getElementById('insStatus');
+    st.textContent = '深报生成中…';
+    fetch('/api/insight/deep', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weeks: 1, ai: !!withAi }) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) { st.textContent = '✗ ' + (d.msg || '失败'); return; }
+        var w = window.open('', '_blank');
+        w.document.write('<title>每周深报</title><body style="font-family:sans-serif;max-width:820px;margin:24px auto;padding:0 16px;white-space:pre-wrap;line-height:1.7;">'
+          + d.markdown.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+          + '<hr><small>报告已存 output/深报_当天.md</small>');
+        w.document.close();
+        st.textContent = '✔ 深报已生成' + (d.file ? '（已落盘 ' + d.file.split('/').pop() + '）' : '');
+      }).catch(function (e) { st.textContent = '深报失败：' + e; });
+  };
+  adoptLoad();
+
+  function tick() {
+    fetch('/api/insight/list').then(function (r) { return r.json(); }).then(function (d) {
+      var run = d.run || {}, st = document.getElementById('insStatus');
+      if (run.state === 'running') {
+        st.textContent = '扫描中（' + (run.done || 0) + '/' + (run.total || 0) + '）' + (run.step || '');
+        poll = setTimeout(tick, 2000);
+      } else {
+        st.textContent = run.state === 'done'
+          ? ('✔ 本轮发现 ' + run.found + ' 条（新增 ' + run.added + '、更新 ' + run.updated + '、台账共 ' + run.total_all + '）｜' + insCovText(run.coverage) + (run.caliber ? '｜' + run.caliber : ''))
+          : (run.state === 'error' ? '✗ 扫描失败：' + (run.log || '') : '');
+        insLoad();
+      }
+    });
+  }
+
+  window.insRefresh = function () {
+    if (poll) clearTimeout(poll);
+    fetch('/api/insight/refresh', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.ok) { alert(d.msg || '启动失败'); return; }
+      document.getElementById('insStatus').textContent = '已启动扫描…';
+      tick();
+    }).catch(function (e) { alert('启动失败：' + e); });
+  };
+
+  window.insInterpret = function () {
+    if (!confirm('调用大模型解读当前台账前 14 条，约 ¥0.03、15-40 秒？\n（模型只解释与排序，不会改动任何数字）')) return;
+    var b = document.getElementById('insAiBtn'); b.disabled = true; b.textContent = '🤖 解读中…';
+    fetch('/api/insight/interpret', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      .then(function (r) { return r.json(); }).then(function (d) {
+        b.disabled = false; b.textContent = '🤖 AI 解读这批（约 ¥0.03）';
+        if (!d.ok) { alert(d.msg || '解读失败'); return; }
+        alert('已写入 ' + d.noted + ' 条解释。' + (d.overall ? '\n今天最该动的一件事：' + d.overall : ''));
+        insLoad();
+      }).catch(function (e) {
+        b.disabled = false; b.textContent = '🤖 AI 解读这批（约 ¥0.03）'; alert('解读失败：' + e);
+      });
+  };
+
+  window.insSet = function (key, status) {
+    fetch('/api/insight/state', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: key, status: status }) })
+      .then(function (r) { return r.json(); }).then(function (d) { if (!d.ok) alert(d.msg || '失败'); insLoad(); });
+  };
+
+  insLoad();
+})();
+</script>
+{% include "_assistant.html" %}
+</body>
+</html>

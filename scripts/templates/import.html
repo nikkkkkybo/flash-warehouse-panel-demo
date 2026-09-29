@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>导入新表 - 列映射</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        /* 导入页专属样式 */
+        .import-header h1 { font-size: 20px; color: #1e293b; margin-bottom: 6px; }
+        .import-header .sub { color: #64748b; font-size: 13px; }
+
+        .upload-card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 20px 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .upload-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .upload-row input[type="file"] {
+            flex: 1;
+            min-width: 240px;
+            padding: 8px 10px;
+            border: 1px dashed #94a3b8;
+            border-radius: 6px;
+            background: #f8fafc;
+            font-size: 13px;
+        }
+        .upload-row input[type="text"] {
+            min-width: 220px;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .upload-row input:focus { outline: none; border-color: #3b82f6; }
+        .upload-hint { color: #64748b; font-size: 12px; margin-top: 8px; }
+
+        /* 映射表 */
+        .mapping-card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 20px 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            display: none;
+        }
+        .mapping-card.show { display: block; }
+        .mapping-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 6px;
+        }
+        .mapping-stat {
+            font-size: 13px;
+            color: #64748b;
+            margin-bottom: 14px;
+        }
+        .mapping-stat b { color: #1e40af; }
+        .mapping-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .mapping-table thead { background: #f8fafc; }
+        .mapping-table th {
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #475569;
+            border-bottom: 2px solid #e2e8f0;
+            font-size: 13px;
+        }
+        .mapping-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+            font-size: 13px;
+        }
+        .mapping-table tr:hover { background: #f8fafc; }
+        .col-idx { width: 50px; text-align: center; color: #94a3b8; }
+        .col-excel { font-weight: 600; color: #1e293b; word-break: break-all; }
+        .col-field-select {
+            padding: 6px 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 13px;
+            background: #fff;
+            min-width: 200px;
+        }
+        .col-field-select:focus { outline: none; border-color: #3b82f6; }
+        .col-field-select.unmapped {
+            background: #fef2f2;
+            border-color: #fca5a5;
+            color: #991b1b;
+        }
+        .col-status {
+            width: 90px;
+            text-align: center;
+            font-size: 12px;
+        }
+        .badge-hit { background: #dcfce7; color: #166534; padding: 3px 10px; border-radius: 10px; }
+        .badge-miss { background: #fee2e2; color: #991b1b; padding: 3px 10px; border-radius: 10px; }
+
+        .confirm-bar {
+            background: #fff;
+            border-radius: 10px;
+            padding: 16px 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            display: none;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .confirm-bar.show { display: flex; }
+        .confirm-bar .btn { padding: 9px 22px; }
+
+        /* 结果提示 */
+        .result-card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 20px 24px;
+            margin-top: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            display: none;
+        }
+        .result-card.show { display: block; }
+        .result-card.success { border-left: 4px solid #10b981; }
+        .result-card.error { border-left: 4px solid #ef4444; }
+        .result-card h3 { font-size: 16px; margin-bottom: 10px; }
+        .result-card.success h3 { color: #166534; }
+        .result-card.error h3 { color: #991b1b; }
+        .result-card pre {
+            background: #f8fafc;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #475569;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .loading-mask {
+            display: none;
+            color: #2563eb;
+            font-size: 14px;
+            padding: 8px 0;
+        }
+        .loading-mask.show { display: block; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- 顶部导航 -->
+    {% set active = 'tools' %}
+    {% include "_nav.html" %}
+
+    <!-- 标题 -->
+    <div class="import-header" style="background:#fff;border-radius:10px;padding:18px 24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+        <h1>📥 导入新表 - 列映射</h1>
+        <div class="sub">上传新竞品 Excel，系统自动猜列映射，人工确认后提取为标准格式表</div>
+    </div>
+
+    <!-- 上传区 -->
+    <div class="upload-card">
+        <div class="upload-row">
+            <input type="file" id="fileInput" accept=".xlsx,.xls" multiple>
+            <input type="text" id="sourceName" placeholder="店铺名（必填，如：联强货仓超市）" maxlength="60">
+            <button class="btn" onclick="doUpload()">上传并猜映射</button>
+        </div>
+        <div class="upload-hint">
+            支持 .xlsx / .xls 格式，可一次选择<b>多个文件批量导入</b>。<b>店铺名自动从文件名识别</b>（如"竞品_鑫宗源五金_美团导出.xlsx"→"鑫宗源五金"），上传后可修改确认；同店再上传自动套用已存配置并走数据更新。
+        </div>
+        <div id="uploadLoading" class="loading-mask">上传中，请稍候...</div>
+    </div>
+
+    <!-- 批量导入面板 -->
+    <div id="batchCard" class="mapping-card" style="display:none;">
+        <div class="mapping-title">📦 批量导入清单（<span id="batchCount">0</span> 家）</div>
+        <div class="upload-hint">已识别店铺名，可修改后点「开始批量导入」；每家将自动完成 入库→归一化→对齐→汇总库同步（每家约 1-3 分钟）。</div>
+        <div id="batchList" style="margin-top:10px;"></div>
+        <div class="run-bar" style="margin-top:14px;">
+            <button class="btn btn-success" id="batchStartBtn" onclick="startBatchImport()">▶ 开始批量导入</button>
+            <span id="batchProgress" style="font-size:13px;color:#1e40af;"></span>
+        </div>
+    </div>
+
+    <!-- 映射表区 -->
+    <div id="mappingCard" class="mapping-card">
+        <div class="mapping-title">📋 列映射预览</div>
+        <div id="mappingStat" class="mapping-stat"></div>
+        <table class="mapping-table">
+            <thead>
+                <tr>
+                    <th class="col-idx">#</th>
+                    <th>Excel 列名</th>
+                    <th>映射到标准字段</th>
+                    <th class="col-status">状态</th>
+                </tr>
+            </thead>
+            <tbody id="mappingBody"></tbody>
+        </table>
+    </div>
+
+    <!-- 确认条 -->
+    <div id="confirmBar" class="confirm-bar">
+        <button class="btn btn-success" id="confirmBtn" onclick="doConfirm()">✓ 确认映射并提取列</button>
+        <button class="btn btn-secondary" onclick="resetAll()">重新上传</button>
+        <span id="confirmHint" style="color:#64748b;font-size:13px;">检查无误后点击确认，将保存配置并输出标准格式表到 output/ 目录</span>
+    </div>
+
+    <!-- 结果提示 -->
+    <div id="resultCard" class="result-card">
+        <h3 id="resultTitle"></h3>
+        <div id="resultBody"></div>
+    </div>
+
+    <!-- 已导入店铺管理 -->
+    <div class="upload-card" style="margin-top:18px;">
+        <div class="mapping-title">🏪 已导入店铺管理</div>
+        <div class="upload-hint">重复导入同一店铺时，可先删除旧店铺再重新导入（删除将移除该店全部数据：标准库/对齐结果/进度，不可恢复）。</div>
+        <div id="shopManageList" style="margin-top:10px;"></div>
+    </div>
+
+    <!-- 删除店铺确认弹窗 -->
+    <div id="delModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:999;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:12px;max-width:440px;width:92%;padding:22px 26px;box-shadow:0 10px 40px rgba(0,0,0,0.2);">
+            <h3 style="margin:0 0 12px;color:#dc2626;font-size:17px;">⚠️ 删除店铺确认</h3>
+            <div id="delModalBody" style="font-size:13px;color:#334155;line-height:1.8;"></div>
+            <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeDelModal()">取消</button>
+                <button class="btn btn-danger" onclick="doDeleteShop()" id="delConfirmBtn">确认删除</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 标准字段列表（后端返回），含"待指定"和"忽略"
+let STANDARD_FIELDS = [];
+let currentFile = { file_id: '', file_name: '', source_name: '' };
+
+// HTML转义
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// 上传 -> 后端猜映射（支持多文件批量）
+function doUpload() {
+    const fileInput = document.getElementById('fileInput');
+    const sourceInput = document.getElementById('sourceName');
+    const files = fileInput.files;
+    if (!files || !files.length) { alert('请先选择 Excel 文件'); return; }
+
+    if (files.length > 1) {
+        // 批量导入：逐个上传（自动识别店名），列出清单后一键导入
+        batchUpload(files);
+        return;
+    }
+
+    const file = files[0];
+    const sourceName = sourceInput.value.trim();
+
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('source_name', sourceName);
+    // 单文件也自动识别店名（未手填时从文件名提取，识别后可修改）
+    fd.append('auto_shop', '1');
+
+    document.getElementById('uploadLoading').classList.add('show');
+    document.getElementById('mappingCard').classList.remove('show');
+    document.getElementById('confirmBar').classList.remove('show');
+    document.getElementById('resultCard').classList.remove('show');
+
+    fetch('/import/upload', { method: 'POST', body: fd })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            document.getElementById('uploadLoading').classList.remove('show');
+            if (!data.ok) {
+                showResult(false, '上传失败', data.msg || '未知错误');
+                return;
+            }
+            STANDARD_FIELDS = data.standard_fields || [];
+            currentFile = {
+                file_id: data.file_id,
+                file_name: data.file_name,
+                source_name: data.source_name,
+            };
+            // 回填来源名
+            sourceInput.value = data.source_name;
+            renderMapping(data.columns, data.hit_count, data.total_count);
+        })
+        .catch(function(err) {
+            document.getElementById('uploadLoading').classList.remove('show');
+            showResult(false, '上传出错', err.message);
+        });
+}
+
+// ============ 批量导入 ============
+let batchItems = [];   // {file_id, file_name, source_name, columns, hit, total, status}
+let batchBusy = false;
+
+function batchUpload(files) {
+    document.getElementById('uploadLoading').classList.add('show');
+    document.getElementById('batchCard').style.display = 'none';
+    const items = [];
+    const tasks = Array.from(files).map(function(file) {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('source_name', '');
+        fd.append('auto_shop', '1');   // 后端自动从文件名提取店名
+        return fetch('/import/upload', { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    items.push({
+                        file_id: data.file_id,
+                        file_name: data.file_name,
+                        source_name: data.source_name,
+                        columns: data.columns || [],
+                        hit: data.hit_count || 0,
+                        total: data.total_count || 0,
+                        status: 'ready',
+                        msg: '',
+                        row_count: 0,
+                    });
+                } else {
+                    items.push({ file_id: '', file_name: file.name, source_name: '',
+                                  columns: [], hit: 0, total: 0, status: 'error', msg: data.msg || '上传失败' });
+                }
+            })
+            .catch(function(err) {
+                items.push({ file_id: '', file_name: file.name, source_name: '',
+                              columns: [], hit: 0, total: 0, status: 'error', msg: err.message });
+            });
+    });
+    Promise.all(tasks).then(function() {
+        document.getElementById('uploadLoading').classList.remove('show');
+        batchItems = items;
+        renderBatchList();
+        document.getElementById('batchCard').style.display = 'block';
+    });
+}
+
+function renderBatchList() {
+    const box = document.getElementById('batchList');
+    document.getElementById('batchCount').textContent = batchItems.length;
+    let html = '';
+    batchItems.forEach(function(it, i) {
+        html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;background:#fff;">';
+        html += '<span style="font-size:12px;color:#94a3b8;width:30px;">' + (i + 1) + '.</span>';
+        html += '<input type="text" value="' + escapeHtml(it.source_name) + '" data-idx="' + i + '" style="flex:1;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;" onchange="batchItems[' + i + '].source_name=this.value.trim()">';
+        html += '<span style="font-size:12px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;" title="' + escapeHtml(it.file_name) + '">' + escapeHtml(it.file_name) + '</span>';
+        if (it.status === 'ready') {
+            const pct = it.total ? Math.round(it.hit / it.total * 100) : 0;
+            html += '<span class="badge-hit">列识别 ' + pct + '%</span>';
+        } else if (it.status === 'error') {
+            html += '<span class="badge-miss" title="' + escapeHtml(it.msg) + '">上传失败</span>';
+        } else if (it.status === 'running') {
+            html += '<span class="badge" style="background:#eff6ff;color:#1e40af;">导入中...</span>';
+        } else if (it.status === 'done') {
+            html += '<span class="badge" style="background:#dcfce7;color:#166534;">✓ ' + it.row_count + ' 行</span>';
+        } else if (it.status === 'failed') {
+            html += '<span class="badge" style="background:#fee2e2;color:#991b1b;" title="' + escapeHtml(it.msg) + '">✗ 失败</span>';
+        }
+        html += '</div>';
+    });
+    box.innerHTML = html;
+    const ready = batchItems.filter(function(x){ return x.status === 'ready'; }).length;
+    const errs = batchItems.filter(function(x){ return x.status === 'error'; }).length;
+    document.getElementById('batchStartBtn').textContent = '▶ 开始批量导入（' + ready + ' 家）';
+    document.getElementById('batchStartBtn').disabled = batchBusy || ready === 0;
+}
+
+function startBatchImport() {
+    if (batchBusy) return;
+    const ready = batchItems.filter(function(x){ return x.status === 'ready'; });
+    if (!ready.length) { alert('没有可导入的文件（请检查上传失败项）'); return; }
+    batchBusy = true;
+    const btn = document.getElementById('batchStartBtn');
+    btn.disabled = true;
+    const progress = document.getElementById('batchProgress');
+
+    let doneCount = 0, okCount = 0;
+    function next(i) {
+        if (i >= batchItems.length) {
+            batchBusy = false;
+            progress.textContent = '全部完成：成功 ' + okCount + ' 家' + (batchItems.length - okCount > 0 ? '，失败 ' + (batchItems.length - okCount) + ' 家' : '');
+            btn.textContent = '重新选择文件可再次导入';
+            loadShops();
+            return;
+        }
+        const it = batchItems[i];
+        if (it.status !== 'ready') { next(i + 1); return; }
+        it.status = 'running';
+        renderBatchList();
+        progress.textContent = '正在导入（' + (doneCount + 1) + '/' + batchItems.length + '）：' + it.source_name + '（约1-3分钟，请勿关闭页面）';
+
+        // 用猜列结果构造映射（与单文件一致）
+        const mapping = {};
+        (it.columns || []).forEach(function(pv) {
+            if (pv.field && pv.field !== '待指定' && pv.field !== '忽略') {
+                mapping[pv.excel_col] = pv.field;
+            }
+        });
+        fetch('/import/confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_id: it.file_id, file_name: it.file_name,
+                                   source_name: it.source_name, mapping: mapping })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.ok) {
+                it.status = 'done';
+                it.row_count = d.align_rows || d.row_count || 0;
+                okCount++;
+            } else {
+                it.status = 'failed';
+                it.msg = d.msg || '导入失败';
+            }
+            doneCount++;
+            renderBatchList();
+            next(i + 1);
+        })
+        .catch(function(e) {
+            it.status = 'failed';
+            it.msg = e.message;
+            doneCount++;
+            renderBatchList();
+            next(i + 1);
+        });
+    }
+    next(0);
+}
+
+// 渲染映射表
+function renderMapping(columns, hitCount, totalCount) {
+    const body = document.getElementById('mappingBody');
+    const card = document.getElementById('mappingCard');
+    const stat = document.getElementById('mappingStat');
+
+    let html = '';
+    columns.forEach(function(c, i) {
+        const guessed = c.guessed;
+        const field = c.field;
+        // 构造下拉选项
+        const options = buildOptions(field);
+        const statusBadge = guessed
+            ? '<span class="badge-hit">已猜中</span>'
+            : '<span class="badge-miss">未猜中</span>';
+        const selectClass = guessed ? 'col-field-select' : 'col-field-select unmapped';
+        html += '<tr>';
+        html += '<td class="col-idx">' + (i + 1) + '</td>';
+        html += '<td class="col-excel">' + escapeHtml(c.excel_col) + '</td>';
+        html += '<td><select class="' + selectClass + '" data-col="' + escapeHtml(c.excel_col) + '" onchange="onSelectChange(this)">' + options + '</select></td>';
+        html += '<td class="col-status">' + statusBadge + '</td>';
+        html += '</tr>';
+    });
+    body.innerHTML = html;
+    stat.innerHTML = '共 <b>' + totalCount + '</b> 列，自动猜中 <b>' + hitCount + '</b> 列，准确率 <b>' +
+        (totalCount ? (hitCount / totalCount * 100).toFixed(1) : '0') + '%</b>。请逐行核对下拉框，未猜中的列已标红。';
+
+    card.classList.add('show');
+    document.getElementById('confirmBar').classList.add('show');
+}
+
+// 构造下拉选项（标准字段用中文显示，值为内部字段名；+ 待指定 + 忽略）
+function buildOptions(selectedField) {
+    let html = '';
+    STANDARD_FIELDS.forEach(function(f) {
+        const label = (typeof f === 'object') ? f.label : f;
+        const value = (typeof f === 'object') ? f.value : f;
+        const sel = (value === selectedField) ? ' selected' : '';
+        html += '<option value="' + escapeHtml(value) + '"' + sel + '>' + escapeHtml(label) + '</option>';
+    });
+    ['待指定', '忽略'].forEach(function(f) {
+        const sel = (f === selectedField) ? ' selected' : '';
+        html += '<option value="' + escapeHtml(f) + '"' + sel + '>' + escapeHtml(f) + '</option>';
+    });
+    return html;
+}
+
+// 下拉框变化时调整样式
+function onSelectChange(sel) {
+    const val = sel.value;
+    if (val === '待指定' || val === '忽略') {
+        sel.classList.add('unmapped');
+    } else {
+        sel.classList.remove('unmapped');
+    }
+}
+
+// 确认映射 -> 保存 + 提取
+function doConfirm() {
+    if (!currentFile.file_id) { alert('请先上传文件'); return; }
+    if (!currentFile.source_name || !currentFile.source_name.trim()) {
+        alert('请先填写店铺名（必填）——它决定面板里的店铺名称与同店更新识别，例如：联强货仓超市');
+        document.getElementById('sourceName').focus();
+        return;
+    }
+
+    const selects = document.querySelectorAll('#mappingBody select.col-field-select');
+    const mapping = {};
+    let hasName = false, hasSales = false;
+    selects.forEach(function(sel) {
+        const col = sel.getAttribute('data-col');
+        const field = sel.value;
+        mapping[col] = field;
+        if (field === 'name') hasName = true;
+        if (field === 'sales') hasSales = true;
+    });
+
+    // 核心列校验（与后端一致：商品名+月销量必选；价格缺失时后端自动用 神价/折后价/原价 兜底）
+    if (!hasName || !hasSales) {
+        alert('核心列必须包含 商品名、月销量（价格缺失时自动用神价/折后价/原价兜底），请检查映射');
+        return;
+    }
+
+    if (!confirm('确认按当前映射保存配置并提取列？')) return;
+
+    // 确认中提示（导入+对齐需数分钟，防止用户以为没反应）
+    const confirmBtn = document.getElementById('confirmBtn');
+    const confirmHint = document.getElementById('confirmHint');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = '⏳ 确认中，正在导入并对齐（约1-3分钟）...';
+    confirmHint.textContent = '请勿关闭页面/重复点击；完成后会自动显示结果。';
+
+    const payload = {
+        file_id: currentFile.file_id,
+        file_name: currentFile.file_name,
+        source_name: currentFile.source_name,
+        mapping: mapping,
+    };
+
+    fetch('/import/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = '✓ 确认映射并提取列';
+            confirmHint.textContent = '检查无误后点击确认，将保存配置并输出标准格式表到 output/ 目录';
+            if (data.ok) {
+                showResult(true, '导入成功', formatSuccess(data));
+            } else {
+                showResult(false, '导入失败', data.msg || '未知错误');
+            }
+        })
+        .catch(function(err) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = '✓ 确认映射并提取列';
+            confirmHint.textContent = '检查无误后点击确认，将保存配置并输出标准格式表到 output/ 目录';
+            showResult(false, '请求出错', err.message);
+        });
+}
+
+function formatSuccess(data) {
+    let html = '<div style="margin-bottom:8px;">' + escapeHtml(data.msg) + '</div>';
+    // 重复导入提示
+    if (data.duplicate) {
+        html += '<div style="margin-bottom:8px;padding:10px 12px;background:#fef3c7;border-radius:8px;color:#92400e;font-size:13px;">';
+        html += '⚠ <b>该文件之前已导入过</b>（' + escapeHtml(data.duplicate.time || '') +
+            '，店铺：' + escapeHtml(data.duplicate.source_name || '-') + '）。<br>';
+        html += '本次仍按' + (data.same_shop ? '<b>数据更新</b>' : '<b>新店</b>') + '处理完成。' +
+            (data.same_shop ? '' : '如确为同一店铺的数据更新，请使用与上次相同的店铺名重新导入。');
+        html += '</div>';
+    }
+    // 自动入库+对齐结果
+    if (data.align_msg) {
+        html += '<div style="margin-bottom:8px;padding:10px 12px;background:#ecfdf5;border-radius:8px;color:#065f46;font-size:13px;">';
+        html += '✅ ' + escapeHtml(data.align_msg) + '<br>';
+        html += '已自动完成：标准化入库 → 归一化 → 对齐 → 两层汇总库同步。' +
+            (data.align_rows ? '（对齐' + escapeHtml(String(data.align_rows)) + ' 行）' : '');
+        if (data.same_shop) {
+            html += '<br><b>同店更新</b>：检测到该店铺 <b>' + escapeHtml(data.same_shop) +
+                '</b> 已导入过，本次按数据更新处理（价格变动/新品已重新对齐）。';
+        }
+        html += '</div>';
+    }
+    // P1.1：本次 vs 上次 变动摘要（同店更新第 2 次起出现；首次导入=基线）
+    if (data.changes) {
+        const ch = data.changes;
+        if (ch.rows > 0) {
+            const label = { '降价': ['ch-down', '竞品较上次降价（注意对手动作）'],
+                            '涨价': ['ch-up', '竞品涨价（自家相对更有优势）'],
+                            '新品': ['ch-new', '首次出现'],
+                            '恢复上架': ['ch-new', '此前消失过，本次回归'],
+                            '下架': ['ch-off', '连续两次导入未出现'],
+                            '断货': ['ch-oos', '库存归零'],
+                            '回补': ['ch-oos', '库存从 0 恢复'],
+                            'undercut警报': ['ch-cut', '竞品到手价已低于自家售价（需核对防守价）'] };
+            const order = ['undercut警报', '降价', '涨价', '断货', '新品', '恢复上架', '下架', '回补'];
+            let chips = '';
+            order.forEach(function(k) {
+                const n = ch.counts[k] || 0;
+                if (n > 0 && label[k]) chips += '<span class="ch-item ' + label[k][0] + '" title="' + label[k][1] + '">' + k + ' ' + n + '</span> ';
+            });
+            html += '<div style="margin-bottom:8px;padding:10px 12px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">';
+            html += '📥 <b>本次 vs 上次导入变化</b>（' + escapeHtml((ch.prev_t || '').slice(0, 16)) + ' → ' +
+                escapeHtml((ch.cur_t || '').slice(0, 16)) + '）：<br><span style="display:inline-flex;gap:6px;flex-wrap:wrap;margin-top:6px;">' + chips + '</span>';
+            html += '<div style="font-size:11px;color:#94a3b8;margin-top:6px;">完整变动清单：output/竞店变动报告_*.xlsx；首页顶部也有全店汇总。</div></div>';
+        } else if (ch.note) {
+            html += '<div style="margin-bottom:8px;padding:8px 12px;background:#f8fafc;border-radius:8px;color:#64748b;font-size:12px;">📥 ' +
+                escapeHtml(ch.note) + '</div>';
+        }
+    }
+    html += '<div style="margin-bottom:6px;color:#475569;">';
+    html += '<b>来源名：</b>' + escapeHtml(currentFile.source_name) + '<br>';
+    html += '<b>配置文件：</b>' + escapeHtml(data.profile_path || '-') + '<br>';
+    html += '<b>输出文件：</b>' + escapeHtml(data.output_path || '-') + '<br>';
+    html += '<b>输出行数：</b>' + escapeHtml(String(data.row_count)) + ' 行<br>';
+    html += '<b>输出列：</b>' + escapeHtml((data.columns || []).join(', '));
+    html += '</div>';
+    return html;
+}
+
+// 显示结果
+function showResult(ok, title, body) {
+    const card = document.getElementById('resultCard');
+    const titleEl = document.getElementById('resultTitle');
+    const bodyEl = document.getElementById('resultBody');
+    card.className = 'result-card show ' + (ok ? 'success' : 'error');
+    titleEl.textContent = title;
+    bodyEl.innerHTML = body;
+    card.classList.add('show');
+    if (ok) {
+        // 成功后隐藏映射表和确认条
+        document.getElementById('mappingCard').classList.remove('show');
+        document.getElementById('confirmBar').classList.remove('show');
+    }
+    card.scrollIntoView({ behavior: 'smooth' });
+}
+
+// 重置
+function resetAll() {
+    document.getElementById('fileInput').value = '';
+    document.getElementById('mappingCard').classList.remove('show');
+    document.getElementById('confirmBar').classList.remove('show');
+    document.getElementById('resultCard').classList.remove('show');
+    currentFile = { file_id: '', file_name: '', source_name: '' };
+}
+
+// ============ 已导入店铺管理 ============
+// 店铺改名（输入新名确认后调用接口）
+function renameShop(oldName) {
+    const newName = prompt('给店铺「' + oldName + '」输入新名称：', oldName);
+    if (!newName || newName.trim() === oldName) return;
+    fetch('/api/rename_shop', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({old_name: oldName, new_name: newName.trim()})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        alert(d.ok ? d.msg : d.msg);
+        if (d.ok) loadShops();
+    })
+    .catch(function(e){ alert('改名失败: ' + e.message); });
+}
+
+function loadShops() {
+    fetch('/api/analysis/shops')
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+            const box = document.getElementById('shopManageList');
+            if (!box) return;
+            const shops = d.shops || [];
+            if (!shops.length) { box.innerHTML = '<div style="color:#94a3b8;font-size:13px;">暂无已导入店铺</div>'; return; }
+            let html = '';
+            shops.forEach(function(s) {
+                html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;background:#fff;">';
+                html += '<span style="flex:1;font-size:13px;"><b>' + escapeHtml(s.name) + '</b> <span style="color:#94a3b8;font-size:12px;">（' + s.total + ' 个竞品，' + s.pending + ' 待确认）</span></span>';
+                html += '<button class="btn btn-sm" data-shop="' + escapeHtml(s.name) + '" onclick="renameShop(this.getAttribute(\'data-shop\'))">改名</button>';
+                html += '<button class="btn btn-sm btn-danger" data-shop="' + escapeHtml(s.name) + '" onclick="deleteShop(this.getAttribute(\'data-shop\'))">删除该店</button>';
+                html += '</div>';
+            });
+            box.innerHTML = html;
+        })
+        .catch(function(){});
+}
+
+function deleteShop(shopName) {
+    // 弹出确认询问：待用户明确确认后才执行删除
+    document.getElementById('delModalBody').innerHTML =
+        '您正在删除店铺：<b style="font-size:15px;">' + escapeHtml(shopName) + '</b><br><br>' +
+        '删除后将移除该店全部数据，<b style="color:#dc2626;">不可恢复</b>：<br>' +
+        '· 标准库文件与历史快照（archive）<br>' +
+        '· 对齐结果（人工确认池 / 两层汇总库记录）<br>' +
+        '· 确认进度与导入配置<br><br>' +
+        '请确认是否删除？';
+    window._delShop = shopName;
+    const modal = document.getElementById('delModal');
+    modal.style.display = 'flex';
+    document.getElementById('delConfirmBtn').disabled = false;
+}
+
+function closeDelModal() {
+    document.getElementById('delModal').style.display = 'none';
+    window._delShop = null;
+}
+
+function doDeleteShop() {
+    const shopName = window._delShop;
+    if (!shopName) return;
+    const btn = document.getElementById('delConfirmBtn');
+    btn.disabled = true;
+    btn.textContent = '正在删除...';
+    fetch('/api/delete_shop', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shop: shopName, confirm: true})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        btn.disabled = false;
+        btn.textContent = '确认删除';
+        closeDelModal();
+        if (d.ok) {
+            // 同步刷新管理栏列表（被删店铺立即移除）
+            loadShops();
+            alert(d.msg);
+        } else {
+            alert(d.msg);
+        }
+    })
+    .catch(function(e) {
+        btn.disabled = false;
+        btn.textContent = '确认删除';
+        closeDelModal();
+        alert('删除失败: ' + e.message);
+    });
+}
+
+window.onload = function() {
+    loadShops();
+};
+</script>
+</body>
+</html>

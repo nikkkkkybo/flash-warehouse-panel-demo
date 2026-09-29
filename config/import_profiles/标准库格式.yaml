@@ -1,0 +1,10 @@
+# 竞品表导入配置（竞店标准库格式）
+# 标准库（output/竞店标准库/竞品_<店名>_标准化.xlsx）已是统一英文 schema，
+# normalize.py --config 引用本配置后即可直接归一化，无需再猜列。
+# 用法：python scripts/normalize.py --comp-path <标准表.xlsx> --config config/import_profiles/标准库格式.yaml ...
+source_name: 标准库格式
+mapping:
+  name: name
+  spec: spec
+  category3: category3
+created_at: '2026-08-07 00:00:00'

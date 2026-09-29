@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小模型微调监控 · P2.4</title>
+<style>
+:root{--bg:#0f1419;--card:#1a2129;--line:#2a3441;--tx:#d8e0ea;--dim:#8494a7;
+--ok:#3fb96f;--run:#4a9eff;--warn:#e8a33d;--err:#e05252;--acc:#9b7dff}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font:14px/1.6 "Segoe UI","Microsoft YaHei",sans-serif;padding:20px}
+.wrap{max-width:1080px;margin:0 auto}
+h1{font-size:20px;font-weight:600;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.badge{font-size:12px;padding:2px 12px;border-radius:12px;border:1px solid var(--line)}
+.badge.idle{color:var(--dim)}.badge.running{color:var(--run);border-color:var(--run)}
+.badge.done{color:var(--ok);border-color:var(--ok)}.badge.error,.badge.interrupted{color:var(--err);border-color:var(--err)}
+button{background:var(--run);border:0;color:#fff;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px}
+button:disabled{background:var(--line);color:var(--dim);cursor:default}
+button.ghost{background:transparent;border:1px solid var(--line);color:var(--dim)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+.card h2{font-size:13px;font-weight:600;color:var(--dim);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px}
+.full{grid-column:1/-1}
+.bar{height:10px;background:#0d1117;border-radius:5px;overflow:hidden;margin:8px 0}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--run),var(--acc));border-radius:5px;transition:width .5s}
+.kv{display:flex;flex-wrap:wrap;gap:8px 24px}
+.kv div b{display:block;font-size:11px;color:var(--dim);font-weight:400}
+.kv div span{font-size:17px;font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;font-size:13px}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--dim);font-weight:400;font-size:12px}
+td.pos{color:var(--ok)}td.neg{color:var(--err)}td.mar{color:var(--acc);font-weight:600}
+tr.base td{color:var(--dim)}
+canvas{width:100%;height:220px;display:block}
+pre{background:#0d1117;border:1px solid var(--line);border-radius:8px;padding:12px;
+font:12px/1.5 Consolas,monospace;max-height:260px;overflow:auto;white-space:pre-wrap;color:#9fb3c8}
+.hint{font-size:12px;color:var(--dim)}
+.err{color:var(--err);white-space:pre-wrap;font:12px Consolas,monospace;max-height:150px;overflow:auto}
+.pill{display:inline-block;padding:1px 10px;border-radius:10px;font-size:12px;background:#0d1117;border:1px solid var(--line);margin:2px 4px 2px 0}
+.pill.on{color:var(--ok);border-color:var(--ok)}
+@media(max-width:720px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>小模型微调监控 <span id="badge" class="badge idle">加载中</span>
+<span style="flex:1"></span>
+<button id="btnStart" onclick="startTrain()">▶ 启动训练</button>
+<button class="ghost" onclick="tick()">刷新</button></h1>
+
+<div class="grid">
+<div class="card full">
+<h2>训练进度</h2>
+<div class="bar"><i id="bar" style="width:0%"></i></div>
+<div class="kv">
+<div><b>阶段</b><span id="phase">-</span></div>
+<div><b>轮次</b><span id="epoch">-</span></div>
+<div><b>步数</b><span id="step">-</span></div>
+<div><b>当前 loss</b><span id="loss">-</span></div>
+<div><b>预计剩余</b><span id="eta">-</span></div>
+<div><b>开始 / 更新</b><span id="times" style="font-size:12px">-</span></div>
+</div>
+<div id="errBox" class="err" style="display:none"></div>
+</div>
+
+<div class="card full"><h2>Loss 曲线</h2><canvas id="lossChart"></canvas></div>
+
+<div class="card full">
+<h2>评估：真对 / 难负 余弦分离度（门槛 0.62，越高越能开层）</h2>
+<table>
+<thead id="evalHead"><tr><th>轮次</th><th>真对 cos</th><th>难负 cos</th><th>margin</th><th>acc@0.62</th><th>样本</th></tr></thead>
+<tbody id="evalBody"></tbody>
+</table>
+<p class="hint" style="margin-top:8px" id="evalHint">v3 验收三门槛（缺一不可）：recall@5 ≥85% · 无匹配误报（难负超0.62）≤10% · AUC >0.8。绿色=达标方向，红色=未达。单一指标不采信（防"整体压低相似度"的退化解假阳性）。</p>
+</div>
+
+<div class="card full"><h2>v4.1 数据与打标（output/model_train/v4）</h2><div id="v4Box"></div></div>
+<div class="card full"><h2>v4.1 多种子探针（三门槛：recall@5 ≥85% · 无匹配误报 ≤10% · AUC >0.8）</h2><div id="probeBox"></div></div>
+<div class="card full"><h2>错例分析探针（seed43 · 6ep · 产物：rank_detail + 模型存档）</h2><div id="errBox4"></div></div>
+<div class="card full"><h2>黄金集 v2 重核（老标准 320正+134难负 → 新标准逐对复核 + 向量层复验收）</h2><div id="goldenBox"></div></div>
+
+<div class="card"><h2>训练数据</h2><div id="dataBox"></div></div>
+<div class="card"><h2>模型产物</h2><div id="modelBox"></div></div>
+
+<div class="card full"><h2>运行日志（末尾 120 行）</h2><pre id="log">-</pre></div>
+</div>
+<p class="hint" style="margin-top:12px">每 3 秒自动刷新 · 面板端口 5010 · 训练由 .ftvenv 环境执行（scripts/finetune_bge.py）</p>
+</div>
+
+<script>
+let last=null,timer=null;
+const $=id=>document.getElementById(id);
+function fmt(s){if(!s&&s!==0)return'-';if(s>3600)return Math.round(s/3600)+'时'+Math.round(s%3600/60)+'分';if(s>60)return Math.round(s/60)+'分'+Math.round(s%60)+'秒';return s+'秒'}
+function fnum(v,d=4){return(v===null||v===undefined)?'-':(+v).toFixed(d)}
+function badge(st){const b=$('badge');b.className='badge '+st;return{idle:'空闲',running:'训练中',done:'已完成',error:'异常',interrupted:'已中断'}[st]||st}
+function drawLoss(hist){
+ const c=$('lossChart'),dpr=devicePixelRatio||1;
+ const W=c.clientWidth,H=c.clientHeight;c.width=W*dpr;c.height=H*dpr;
+ const x=c.getContext('2d');x.scale(dpr,dpr);x.clearRect(0,0,W,H);
+ if(!hist||hist.length<2){x.fillStyle='#8494a7';x.font='13px sans-serif';x.fillText('暂无数据（训练启动后出现）',20,60);return}
+ const losses=hist.map(p=>p.loss),maxL=Math.max(...losses)*1.05,minL=Math.min(...losses)*0.95;
+ const L=46,R=10,T=12,B=26,pw=W-L-R,ph=H-T-B;
+ const X=i=>L+pw*i/(hist.length-1),Y=v=>T+ph*(1-(v-minL)/(maxL-minL||1));
+ x.strokeStyle='#2a3441';x.fillStyle='#8494a7';x.font='10px sans-serif';
+ for(let g=0;g<=4;g++){const v=minL+(maxL-minL)*g/4,y=Y(v);
+  x.beginPath();x.moveTo(L,y);x.lineTo(W-R,y);x.stroke();x.fillText(v.toFixed(3),4,y+3)}
+ const eps=[...new Set(hist.map(p=>p.epoch))];
+ eps.forEach(e=>{const idx=hist.findIndex(p=>p.epoch===e);
+  if(idx>0){x.strokeStyle='#3a4656';x.setLineDash([4,4]);x.beginPath();x.moveTo(X(idx),T);x.lineTo(X(idx),H-B);x.stroke();x.setLineDash([]);
+  x.fillStyle='#8494a7';x.fillText('轮'+e,X(idx)+3,T+10)}});
+ x.strokeStyle='#4a9eff';x.lineWidth=1.6;x.beginPath();
+ hist.forEach((p,i)=>{i?x.lineTo(X(i),Y(p.loss)):x.moveTo(X(i),Y(p.loss))});x.stroke();
+ x.fillStyle='#4a9eff';x.font='11px sans-serif';x.fillText('step '+hist[hist.length-1].step,W-R-70,H-8);
+}
+const EV_COLS=[['recall1','recall@1'],['recall5','recall@5'],['recall10','recall@10'],
+ ['pos_med','真对 cos'],['pos_cos','真对 cos'],['neg_med','难负 cos'],['neg_cos','难负 cos'],
+ ['margin','margin'],['acc','acc@0.62'],['neg_gt_062','无匹配误报'],['gate_ratio','难负超0.62'],
+ ['auc','AUC'],['n_eval','验证对'],['n_pos','样本']];
+const GATES={recall5:.85,neg_gt_062:.10,auc:.80};
+function gateCls(k,v){const g=GATES[k];if(g===undefined)return'';
+ let bad=(k==='neg_gt_062')?v>g:v<g;return bad?'neg':'pos'}
+function renderEval(ev){
+ ev=(ev||[]).sort((a,b)=>a.epoch-b.epoch);
+ const cols=EV_COLS.filter(c=>ev.some(h=>h[c[0]]!==undefined&&h[c[0]]!==null));
+ $('evalHead').innerHTML='<tr><th>轮次</th>'+cols.map(c=>'<th>'+c[1]+'</th>').join('')+'</tr>';
+ $('evalBody').innerHTML=ev.map(h=>
+  `<tr${h.epoch===0?' class="base"':''}><td>${h.epoch===0?'基线（未微调）':'第 '+h.epoch+' 轮'}${h.accepted?' <span class="pill on">达标</span>':''}</td>`+
+  cols.map(([k,lab])=>{const v=h[k];
+   const cls=(h.epoch!==0&&GATES[k]!==undefined)?gateCls(k,v):'';
+   const txt=(typeof v==='number'&&k!=='n_val'&&k!=='n_pos'&&k!=='n_eval')?(k==='acc'||k==='neg_gt_062'||k==='gate_ratio'? (v*100).toFixed(1)+'%' : v.toFixed(3)):(v??'-');
+   return `<td class="${cls}">${txt}</td>`}).join('')+'</tr>').join('');
+}
+function render(st){
+ last=st;
+ $('badge').textContent=badge(st.status||'idle');
+ const running=st.running;
+ $('btnStart').disabled=running;
+ $('phase').textContent=st.phase||'-';
+ $('epoch').textContent=(st.epoch||0)+' / '+(st.total_epochs||'-');
+ $('step').textContent=(st.step||0)+' / '+(st.total_steps||'-');
+ $('loss').textContent=fnum(st.loss,4);
+ $('eta').textContent=st.eta_sec?fmt(st.eta_sec):(st.status==='done'?'完成':'-');
+ $('times').textContent=(st.started_at||'-')+' → '+(st.updated_at||'-');
+ $('bar').style.width=((st.progress||0)*100).toFixed(1)+'%';
+ const eb=$('errBox');
+ if(st.err){eb.style.display='block';eb.textContent=st.err}else eb.style.display='none';
+ drawLoss(st.loss_history);
+ const ev=st.eval_history||[];
+renderEval(ev);
+ const d=st.data||{};
+ $('dataBox').innerHTML=
+  `<p style="font-size:12px;color:var(--dim)">v3 品级数据（output/model_train/v3，L1 硬证据正对 + L5 难负）</p>`+
+  [['pos','正对（L1 条码/型号 + 人工）'],['tri','显式难负三元组（进损失）'],['ev','评估 query（与训练零重叠）'],['hn','难负对（评估用）']]
+  .map(([k,lab])=>`<span class="pill ${d[k]&&d[k].lines?'on':''}">${lab}: ${d[k]?d[k].lines:0}</span>`).join('')+
+  `<p style="font-size:12px;color:var(--dim);margin-top:6px">题词向量库外部数据（仅参考，不可训）</p>`+
+  [['mnr','mnr'],['bi','bi'],['triplet','triplet'],['cross','cross']]
+  .map(([k,lab])=>`<span class="pill">${lab}: ${d[k]?d[k].lines:0}</span>`).join('');
+ const m=st.models||{};
+ $('modelBox').innerHTML=
+  `<span class="pill ${m.src&&m.src.ready?'on':''}">底座 bge-small-zh-v1.5-hf ${m.src&&m.src.ready?'就绪':'缺失'}</span>`+
+  `<span class="pill ${m.onnx&&m.onnx.ready?'on':''}">ONNX int8 推理版（线上）${m.onnx&&m.onnx.ready?'就绪':'缺失'}</span>`+
+  `<span class="pill ${m.ft&&m.ft.ready?'on':''}">v3 微调产物 -ft3 ${m.ft&&m.ft.ready?'已保存':'未产出'}</span>`+
+  `<span class="pill ${m.onnx_onnx?'on':''}">v3 ONNX int8 ${m.onnx_onnx?'已导出':'未导出'}</span>`+
+  `<span class="pill ${m.finetuned_flag?'on':''}">FINETUNED 开层标记 ${m.finetuned_flag?'已放':'未放'}</span>`+
+  (m.accepted?`<p class="hint" style="margin-top:8px;color:var(--ok)">✅ 验收通过（三门槛）— 可申请放标记开层</p>`
+   :`<p class="hint" style="margin-top:8px">验收三门槛：recall@5 ≥85% · 无匹配误报 ≤10% · AUC >0.8（ONNX int8 实测通过才可申请放标记）</p>`);
+  $('log').textContent=st.log_tail||'（暂无日志）';
+ renderV4(st.v4);
+ renderErr(st.v4&&st.v4.errprobe);
+ renderGolden(st.v4&&st.v4.golden);
+}
+function pct(v){return(v===null||v===undefined)?'-':(v*100).toFixed(1)+'%'}
+function renderV4(v4){
+ if(!v4){$('v4Box').innerHTML='<p class="hint">暂无 v4 数据</p>';$('probeBox').innerHTML='';return}
+ const lab=v4.anchors_total?Math.min(100,v4.anchors_labeled/v4.anchors_total*100):0;
+ $('v4Box').innerHTML=
+  `<div class="bar"><i style="width:${lab.toFixed(1)}%"></i></div>`+
+  `<p class="hint">打标进度：${v4.anchors_labeled} / ${v4.anchors_total} 锚点（agent-LLM 裁决，DeepSeek 402 改由代理打标）</p>`+
+  `<div style="margin:8px 0">`+
+  `<span class="pill ${v4.anchors_labeled>=v4.anchors_total?'on':''}">锚点已判 ${v4.anchors_labeled}/${v4.anchors_total}</span>`+
+  `<span class="pill ${v4.llm_pos?'on':''}">L4 同款 pos ${v4.llm_pos}</span>`+
+  `<span class="pill ${v4.llm_neg?'on':''}">L4 非 neg ${v4.llm_neg}</span>`+
+  `<span class="pill">null/弃用 ${v4.llm_null}</span>`+
+  `</div>`+
+  `<p class="hint">L4 裁决占比：同款 ${(v4.llm_pos/Math.max(1,v4.llm_pos+v4.llm_neg)*100).toFixed(0)}% · 堆叠源：复核 466 + L2 机判 222 + L4 代理打标 ${v4.llm_pos}</p>`+
+  `<div style="margin-top:8px">`+
+  `<span class="pill ${v4.pos?'on':''}">训练正对 ${v4.pos}（目标 3k+）</span>`+
+  `<span class="pill ${v4.ev>=500?'on':''}">评估 query ${v4.ev}${v4.ev>=500?' ✅':'（目标 ≥500）'}</span>`+
+  `<span class="pill ${v4.tri?'on':''}">三元组 ${v4.tri}</span>`+
+  `<span class="pill ${v4.hn?'on':''}">难负对 ${v4.hn}</span>`+
+  `</div>`;
+ const P=v4.probe;
+ if(!P){$('probeBox').innerHTML='<p class="hint">尚未运行探针（.ftvenv\\Scripts\\python.exe scripts/_train_v4_probe.py）</p>';return}
+ const g=P.gates||{recall5:.85,neg_gt_062:.10,auc:.8};
+ const cls=(k,v,ep)=>{if(!ep)return'';const bad=(k==='neg_gt_062')?v>g[k]:v<g[k];return bad?'neg':'pos'};
+ let rows='';
+ (P.seeds||[]).forEach(s=>{
+  if(s.error){rows+=`<tr><td>seed${s.seed}</td><td colspan="7" class="neg">${s.error}</td></tr>`;return}
+  (s.history||[]).forEach(h=>{
+   rows+=`<tr${h.epoch?'':' class="base"'}><td>seed${s.seed}${h.epoch?' · 第'+h.epoch+'轮':' · 基线'}${h.accepted?' <span class="pill on">达标</span>':''}</td>`+
+    `<td class="${cls('recall5',h.recall5,h.epoch)}">${pct(h.recall5)}</td>`+
+    `<td class="${cls('neg_gt_062',h.neg_gt_062,h.epoch)}">${pct(h.neg_gt_062)}</td>`+
+    `<td class="${cls('auc',h.auc,h.epoch)}">${fnum(h.auc,3)}</td>`+
+    `<td>${fnum(h.pos_med,3)}</td><td>${fnum(h.neg_med,3)}</td><td>${h.avg_loss??'-'}</td></tr>`});
+ });
+ const S=P.summary;
+ let sum='';
+ if(S){sum=`<p class="hint" style="margin-top:8px">表格数据：result.json（运行于 ${P.started||'-'}；与上方实时日志不是同一次运行时以日志为准）· 汇总（${S.n_seeds} seeds）：recall@5 mean <b>${pct(S.recall5_mean)}</b> [${pct(S.recall5_min)}, ${pct(S.recall5_max)}] · `+
+  (S.accepted_all?`<span style="color:var(--ok)">三门槛全过 ✅ 可进入正式训练</span>`:`<span style="color:var(--warn)">仅部分达标 — 继续看逐轮/逐 seed 波动</span>`)+'</p>'}
+ else if(P.error){sum=`<p class="err">${P.error}</p>`}
+ else{sum=`<p class="hint">探针运行中 / 未完成（每 3 秒自动刷新）</p>`}
+ $('probeBox').innerHTML=`<table><thead><tr><th>seed/轮次</th><th>recall@5</th><th>无匹配误报</th><th>AUC</th><th>真对 cos 中位</th><th>难负 cos 中位</th><th>平均 loss</th></tr></thead><tbody>${rows}</tbody></table>`+sum+
+  `<p class="hint" style="margin-top:10px">实时日志（${v4.probe_log_file||'-'}，取最新一次运行）</p><pre>${((v4.probe_log||'（暂无日志）')+'').replace(/</g,'&lt;')}</pre>`;
+}
+function renderErr(e){
+ if(!e)return;
+ const done=e.detail_lines>0;
+ $('errBox4').innerHTML=
+  `<div style="margin-bottom:8px">`+
+  `<span class="pill ${done?'on':''}">排序明细 ${e.detail_lines}/530 条${done?' ✅':''}</span>`+
+  `<span class="pill ${e.model_saved?'on':''}">模型存档 ${e.model_saved?'已保存':'训练中'}</span>`+
+  `</div><pre>${((e.log||'（暂无日志）')+'').replace(/</g,'&lt;')}</pre>`;
+}
+function renderGolden(g){
+ if(!g){$('goldenBox').innerHTML='<p class="hint">暂无黄金集重核数据</p>';return}
+ const prog=g.total?Math.min(100,g.labeled/g.total*100):0;
+ let verify='';
+ const V=g.verify;
+ if(V){
+  const gates=(r,k)=>{if(!r)return'';return r.pass?' class="pos"':' class="neg"'};
+  verify=
+  `<table><thead><tr><th>口径</th><th>recall@5</th><th>recall@10</th><th>真对 cos 中位</th><th>难负 cos 中位</th><th>难负超0.62</th><th>结论</th></tr></thead><tbody>`+
+  (V.rows||[]).map(r=>`<tr><td>${r.name}</td>`+
+   `<td>${pct(r.recall5)}</td><td>${pct(r.recall10)}</td>`+
+   `<td>${fnum(r.pos_med,3)}</td><td>${fnum(r.neg_med,3)}</td>`+
+   `<td>${pct(r.neg_gt)}</td>`+
+   `<td${r.pass?' style="color:var(--ok)"':' style="color:var(--warn)"'}>${r.pass?'✅ PASS':'❌ FAIL'}${r.note?(' · '+r.note):''}</td></tr>`).join('')+
+  `</tbody></table>`+
+  (V.conclusion?`<p class="hint" style="margin-top:8px">${V.conclusion}</p>`:'');
+ } else if(g.done){verify='<p class="hint">golden_v2 已物化，向量层复验收待运行</p>'}
+ $('goldenBox').innerHTML=
+  `<div class="bar"><i style="width:${prog.toFixed(1)}%"></i></div>`+
+  `<p class="hint">重核进度：${g.labeled} / ${g.total} 对（pos ${g.pos} + neg ${g.neg}；agent 按新标准逐对裁决）</p>`+
+  `<div style="margin:8px 0">`+
+  `<span class="pill ${g.labeled>=g.total?'on':''}">已判 ${g.labeled}/${g.total}</span>`+
+  `<span class="pill">维持原标 ${g.confirmed}</span>`+
+  `<span class="pill ${g.flipped?'on':''}">翻转/剔除 ${g.flipped}</span>`+
+  (g.done?`<span class="pill on">golden_v2 ${g.v2_pos}正 + ${g.v2_neg}难负</span>`:'')+
+  `</div>`+verify+
+  `<pre style="margin-top:8px">${((g.log||'（暂无日志）')+'').replace(/</g,'&lt;')}</pre>`;
+}
+async function tick(){
+ try{const r=await fetch('/api/status');render(await r.json())}
+ catch(e){$('badge').textContent='面板离线';$('badge').className='badge error'}
+}
+function startTrain(){
+ $('btnStart').disabled=true;
+ fetch('/api/train/start',{method:'POST'}).then(r=>r.json()).then(j=>{if(!j.ok)alert(j.msg);tick()});
+}
+tick();timer=setInterval(tick,3000);
+</script>
+</body>
+</html>

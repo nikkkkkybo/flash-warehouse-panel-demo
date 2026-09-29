@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>经营洞察摘要</title>
+<style>
+body { font-family: "Microsoft YaHei", system-ui, sans-serif; background:#f1f5f9; margin:0; }
+.sheet { max-width: 860px; margin: 24px auto; background:#fff; padding: 28px 34px 34px;
+         border-radius: 12px; box-shadow: 0 2px 10px rgba(15,23,42,.08); color:#0f172a; }
+.bar { max-width:860px; margin: 14px auto 0; display:flex; gap:10px; align-items:center; }
+.bar a, .bar button { font-size:13px; padding:6px 12px; border:1px solid #cbd5e1; border-radius:7px;
+                      background:#fff; color:#2563eb; text-decoration:none; cursor:pointer; }
+h2 { font-size:20px; margin:18px 0 6px; }
+h3 { font-size:17px; margin:16px 0 6px; color:#1e3a8a; }
+h4 { font-size:15px; margin:14px 0 6px; color:#1e40af; }
+p  { margin:3px 0; font-size:14px; line-height:1.7; }
+.li { padding-left:16px; position:relative; font-size:14px; line-height:1.75; margin:2px 0; }
+.li::before { content:"▸"; position:absolute; left:2px; color:#2563eb; }
+hr { border:none; border-top:1px solid #e2e8f0; margin:12px 0; }
+.gap { height:6px; }
+code { background:#f1f5f9; padding:1px 5px; border-radius:4px; font-size:13px; }
+.foot { margin-top:20px; padding-top:12px; border-top:1px dashed #cbd5e1;
+        font-size:12px; color:#64748b; }
+@media print { body{background:#fff} .bar{display:none} .sheet{box-shadow:none;margin:0;max-width:none} }
+</style>
+</head>
+<body>
+<div class="bar">
+  <a href="/analysis">← 回台账</a>
+  <a href="/api/insight/brief?fmt=md">下载纯文本</a>
+  <button onclick="window.print()">打印 / 存 PDF</button>
+  <span style="font-size:12px;color:#94a3b8;">本页数字全部由规则层从当期数据算出，可回台账逐条核对来源</span>
+</div>
+<div class="sheet">
+  {{ body|safe }}
+  <div class="foot">生成时间 {{ at }} · 取前 {{ top }} 条 · 闪电仓选品面板</div>
+</div>
+</body>
+</html>

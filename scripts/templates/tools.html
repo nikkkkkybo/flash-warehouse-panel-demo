@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工具 - 闪电仓选品</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .tools-grid { display: flex; gap: 14px; flex-wrap: wrap; margin: 16px 0; }
+        .tool-card { flex: 1; min-width: 260px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+                     padding: 20px; text-decoration: none; transition: all 0.15s; display: block; }
+        .tool-card:hover { border-color: #93c5fd; box-shadow: 0 4px 14px rgba(37,99,235,0.1);
+                           transform: translateY(-2px); text-decoration: none; }
+        .tool-card .ti { font-size: 30px; margin-bottom: 8px; }
+        .tool-card .tn { font-size: 16px; font-weight: 600; color: #1e293b; margin-bottom: 4px; }
+        .tool-card .td { font-size: 13px; color: #64748b; line-height: 1.6; }
+        .tools-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+                       padding: 14px 18px; margin-top: 14px; }
+        .panel-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+        .panel-sub { color: #64748b; font-size: 12px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    {% set active = 'tools' %}
+    {% include "_nav.html" %}
+
+    <header class="main-header">
+        <h1>🧰 工具</h1>
+        <div class="stats">
+            <span class="stat-item stat-total">已导入竞店 <strong>{{ shop_count }}</strong> 家</span>
+        </div>
+    </header>
+
+    <main>
+        <div class="tools-grid">
+            <a class="tool-card" href="/import">
+                <div class="ti">📥</div>
+                <div class="tn">导入数据</div>
+                <div class="td">上传竞店 Excel（支持批量多店），自动入库 → 归一化 → 对齐；含店铺管理（改名/删除）</div>
+            </a>
+            <a class="tool-card" href="/analysis">
+                <div class="ti">📊</div>
+                <div class="tn">选店分析 · AI</div>
+                <div class="td">勾选几家店对比，价格矩阵 / 竞争分析 / AI 经营报告（需配置 DeepSeek Key）</div>
+            </a>
+            <a class="tool-card" href="/reverse">
+                <div class="ti">🔍</div>
+                <div class="tn">反向查询</div>
+                <div class="td">按自家商品查竞品对应情况（名称/条码/ID），含自家 vs 竞品同卡比价</div>
+            </a>
+            <a class="tool-card" href="/pool">
+                <div class="ti">📋</div>
+                <div class="tn">候选池（检索备用）</div>
+                <div class="td">跨店同品绑定/分组与导出——日常确认在「②定对应」完成，此处只做检索与人工纠偏</div>
+            </a>
+        </div>
+
+        <!-- 自家门店导入（多自家门店比对） -->
+        <div class="tools-panel">
+            <div class="panel-title">🏪 自家门店导入（多自家门店比对）</div>
+            <div class="panel-sub">上传美团后台「门店商品导出」表（表头含 门店编码/SPUID 自动识别）。
+                SPUID 与总库同源直接匹配；导入后在首页切换自家门店，"无对应"将细分为
+                <b style="color:#0369a1;">上架候选</b>（总库有该店没上）与引进候选。同店重传=覆盖更新。</div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                <input type="file" id="ownStoreFile" accept=".xlsx,.xls" style="font-size:13px;">
+                <button class="btn" onclick="uploadOwnStore()">📤 导入门店表</button>
+                <span id="ownStoreStatus" style="font-size:12px;color:#64748b;"></span>
+            </div>
+            <div id="ownStoreList" style="font-size:13px;margin-top:8px;"></div>
+        </div>
+
+        <!-- 已对齐建议（生成入口；建议结果看品详情页） -->
+        <div class="tools-panel">
+            <div class="panel-title">💡 已对齐建议（AI）</div>
+            <div class="panel-sub">按已确认配对生成价差/月售比建议（大模型逐条解读）。生成后建议显示在各品详情页「AI 对齐建议」区。</div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                <select id="adviceShop" class="btn" style="padding:6px 10px;">
+                    {% for s in shops %}<option value="{{ s | e }}">{{ s }}</option>{% endfor %}
+                </select>
+                <button class="btn" onclick="genAlignedAdvice()">✨ 生成已对齐建议</button>
+                <span id="adviceGenStatus" style="font-size:12px;color:#64748b;"></span>
+            </div>
+        </div>
+
+        <!-- 学习管理 -->
+        <div class="tools-panel">
+            <div class="panel-title">📚 学习管理（确认反哺，越用越准）</div>
+            <div class="panel-sub">每次确认都会记入学习样本与关键词库；品牌补全/同义词启用后重跑对齐生效。</div>
+            <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+                <span id="learnStat" style="font-size:13px;color:#475569;"></span>
+                <button class="btn btn-sm" onclick="learnExtract()">✨ 提炼同义词（大模型）</button>
+            </div>
+            <div id="learnBody" style="font-size:13px;margin-top:8px;"></div>
+        </div>
+
+        <!-- 分区管理（区热销榜在首页点区名查看） -->
+        <div class="tools-panel" id="zone-mgmt">
+            <div class="panel-title">🗺️ 分区管理</div>
+            <div class="panel-sub">区 = 店铺的收纳容器：<b>竞店收进区后，首页单店列表不再显示它</b>，想看这些店点首页区名（区总榜 + 可勾选单店重算）。
+                一个竞店只能属于一个区（加入新区自动从原区搬出）；自家店不收纳，各区可共用。删除区 = 店铺搬回单店列表。改勾选不影响任何对齐/汇总数据。</div>
+            <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px;flex-wrap:wrap;">
+                <label style="font-size:13px;">区名：</label>
+                <input type="text" id="zName" placeholder="如：朝阳区东片" style="padding:7px 12px;border:1px solid #cbd5e1;border-radius:8px;min-width:200px;font-size:13px;">
+                <button class="btn btn-green btn-sm" onclick="zoneSave()">💾 保存区</button>
+                <span id="zMsg" style="font-size:12px;color:#64748b;"></span>
+            </div>
+            <div style="font-size:13px;font-weight:600;margin-top:8px;">🏠 自家门店（可选多个）</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 14px;margin:6px 0 10px;">
+                {% for s in own_stores %}
+                <label style="font-size:13px;color:#334155;display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px;white-space:nowrap;overflow:hidden;">
+                    <input type="checkbox" class="zOwn" value="{{ s.name }}"> {{ s.name }} <span style="font-size:10px;color:#94a3b8;">在售{{ s.on_sale_spus }}</span>
+                </label>
+                {% endfor %}
+                {% if not own_stores %}<span style="font-size:12px;color:#94a3b8;">（未导入自家门店数据，可留空）</span>{% endif %}
+            </div>
+            <div style="font-size:13px;font-weight:600;">🏪 竞争店铺（至少选 1 家；勾选已入他区的店 = 搬进本区）</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 14px;margin:6px 0 10px;">
+                {% for s in all_shops %}
+                <label style="font-size:13px;color:#334155;display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px;white-space:nowrap;overflow:hidden;" title="{% if shop_zone.get(s) %}已入区：{{ shop_zone.get(s) }}{% else %}未分组（首页单店列表显示中）{% endif %}">
+                    <input type="checkbox" class="zComp" value="{{ s }}"> {{ s }}
+                    {% if shop_zone.get(s) %}<span style="font-size:10px;color:#2563eb;">📦 {{ shop_zone.get(s) }}</span>{% else %}<span style="font-size:10px;color:#94a3b8;">未分组</span>{% endif %}
+                </label>
+                {% endfor %}
+            </div>
+            {% if zones %}
+            <div style="font-size:13px;font-weight:600;margin-top:6px;">已有分区：</div>
+            {% for z in zones %}
+            {% set comp_str = z.comp_shops | join('、') %}
+            <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:#475569;margin-top:4px;flex-wrap:wrap;">
+                <b>{{ z.name }}</b>
+                <span style="color:#94a3b8;">自家：{{ z.own_stores | join('、') if z.own_stores else '（无）' }} · 竞店 {{ z.comp_shops | length }} 家：{{ comp_str[:60] }}{% if z.comp_shops | length > 3 %}…{% endif %}</span>
+                <a href="javascript:void(0)" style="color:#2563eb;" onclick="zoneEdit('{{ z.name | e }}')">编辑</a>
+                <a href="javascript:void(0)" style="color:#b91c1c;" onclick="zoneDelete('{{ z.name | e }}')">删除</a>
+                <a href="/?zone={{ z.name | urlencode }}" style="color:#059669;">看区榜 →</a>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div style="font-size:12px;color:#94a3b8;margin-top:6px;">还没有分区。填区名 → 勾自家店与竞店 → 保存。</div>
+            {% endif %}
+        </div>
+
+        <!-- 补货参考：店↔仓指认 + 销量回填 -->
+        <div class="tools-panel" id="wh-map">
+            <div class="panel-title">📦 补货参考 · 店仓指认与销量回填</div>
+            <div class="panel-sub">补货参考表给的是<b>仓库</b>维度销量，面板做的是<b>门店</b>对门店比较，两套编码互不相通——必须人工指认「哪家店用哪个仓的数」。
+                <b>未指认的店不再显示任何店对店销量</b>（旧版会静默拿多仓合计冒充本店，已废止）。</div>
+            <div id="whBody" style="font-size:13px;color:#475569;">加载中…</div>
+        </div>
+
+        <!-- 每日体检：红黄绿灯 + 逐项处置 -->
+        <div class="tools-panel" id="health">
+            <div class="panel-title">🩺 每日体检</div>
+            <div class="panel-sub">备份有没有在跑、竞品数据过没过期、店↔仓指认了没有、观测期数够不够出变动结论、
+                有没有幽灵店、快照缓存多大——<b>每项都给能照着做的处置</b>。结果缓存 10 分钟。</div>
+            <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;">
+                <button class="btn btn-sm" onclick="hpLoad(true)">🔄 立即重跑体检</button>
+                <span id="hpMsg" style="font-size:12.5px;color:#64748b;"></span>
+            </div>
+            <div id="hpBody" style="font-size:13px;color:#475569;">加载中…</div>
+        </div>
+    </main>
+</div>
+<script>
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+/* ===== 分区管理 ===== */
+var ZONES = {{ zones | tojson }};
+function zoneSave(){
+    var name = document.getElementById('zName').value.trim();
+    var own = [], comp = [];
+    document.querySelectorAll('.zOwn:checked').forEach(function(c){ own.push(c.value); });
+    document.querySelectorAll('.zComp:checked').forEach(function(c){ comp.push(c.value); });
+    if (!name) { document.getElementById('zMsg').textContent = '请填区名'; return; }
+    if (!comp.length) { document.getElementById('zMsg').textContent = '至少勾选 1 家竞店'; return; }
+    fetch('/api/zone/save', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name: name, own_stores: own, comp_shops: comp})})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        if (d.ok) location.href = '/?zone=' + encodeURIComponent(name);
+        else document.getElementById('zMsg').textContent = d.msg || '保存失败';
+    });
+}
+function zoneEdit(name){
+    document.getElementById('zone-mgmt').scrollIntoView({behavior:'smooth'});
+    document.getElementById('zName').value = name;
+    var z = ZONES.find(function(x){ return x.name === name; }) || {};
+    document.querySelectorAll('.zOwn').forEach(function(c){ c.checked = (z.own_stores || []).indexOf(c.value) >= 0; });
+    document.querySelectorAll('.zComp').forEach(function(c){ c.checked = (z.comp_shops || []).indexOf(c.value) >= 0; });
+}
+function zoneDelete(name){
+    if (!confirm('删除区「' + name + '」？区内店铺将搬回首页单店列表（不删任何数据）')) return;
+    fetch('/api/zone/delete', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name: name})})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ location.reload(); });
+}
+
+/* ===== 自家门店导入 ===== */
+function loadOwnStores() {
+    fetch('/api/own_store/list')
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        if (!d.ok || !d.stores.length) {
+            document.getElementById('ownStoreList').innerHTML =
+                '<span style="color:#94a3b8;">尚未导入任何自家门店。</span>';
+            return;
+        }
+        var html = '<div style="font-weight:600;margin:6px 0 4px;">已导入门店（' + d.stores.length + ' 家）：</div>';
+        d.stores.forEach(function(s) {
+            html += '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:4px;">'
+                + '<span style="flex:1;">🏪 <b>' + escapeHtml(s.name) + '</b> · 在售 ' + s.on_sale_spus
+                + ' SPU / ' + s.rows + ' 行 · 导入于 ' + s.time + '</span>'
+                + '<a class="btn btn-sm" href="/?own_store=' + encodeURIComponent(s.name) + '">去比对 →</a>'
+                + '</div>';
+        });
+        document.getElementById('ownStoreList').innerHTML = html;
+    })
+    .catch(function(){});
+}
+function uploadOwnStore() {
+    var fi = document.getElementById('ownStoreFile');
+    if (!fi.files.length) { alert('请先选择门店导出 xlsx 文件'); return; }
+    var fd = new FormData();
+    fd.append('file', fi.files[0]);
+    var st = document.getElementById('ownStoreStatus');
+    st.textContent = '⏳ 上传导入中...';
+    fetch('/import/own_store', { method: 'POST', body: fd })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        st.textContent = '';
+        alert(d.ok ? d.msg : ('导入失败: ' + d.msg));
+        if (d.ok) loadOwnStores();
+    })
+    .catch(function(e){ st.textContent = ''; alert('请求出错: ' + e.message); });
+}
+
+/* ===== 已对齐建议生成 ===== */
+function genAlignedAdvice() {
+    var shop = document.getElementById('adviceShop').value;
+    if (!shop) { alert('暂无已导入店铺'); return; }
+    if (!confirm('将调用大模型为「' + shop + '」的已确认配对生成建议（约1-3分钟）。\n确定生成？')) return;
+    var st = document.getElementById('adviceGenStatus');
+    st.textContent = '⏳ 生成中（约1-3分钟）...';
+    fetch('/api/advice/generate', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ shops: [shop] })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        st.textContent = '';
+        alert(d.ok ? d.msg : d.msg);
+    })
+    .catch(function(e){ st.textContent = ''; alert('请求出错: ' + e.message); });
+}
+
+/* ===== 学习管理 ===== */
+function loadLearn() {
+    fetch('/api/learn/status')
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+            if (!d.ok) return;
+            var s = d.status;
+            document.getElementById('learnStat').textContent =
+                '学习样本 ' + s.samples + ' 笔 | 待启用同义词 ' + s.pending_synonyms +
+                ' 个 | 待启用品牌补全 ' + s.pending_brand + ' 条 | 关键词库 ' + s.keywords +
+                ' 词 / 覆盖 ' + s.keyword_groups + ' 品组';
+            var html = '';
+            if (s.synonyms && s.synonyms.length) {
+                html += '<div style="font-weight:600;margin:8px 0 4px;">待启用同义词（启用后重跑归一化生效）：</div>';
+                s.synonyms.forEach(function(p) {
+                    html += '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:4px;">';
+                    html += '<span style="flex:1;">' + escapeHtml(p.variant) + ' → <b>' + escapeHtml(p.standard) + '</b></span>';
+                    html += '<button class="btn btn-sm" onclick="learnSyn(\'' + escapeHtml(p.variant) + '\',\'' + escapeHtml(p.standard) + '\',true)">启用</button>';
+                    html += '<button class="btn btn-sm" onclick="learnSyn(\'' + escapeHtml(p.variant) + '\',\'' + escapeHtml(p.standard) + '\',false)">忽略</button>';
+                    html += '</div>';
+                });
+            }
+            if (s.brand_fills && s.brand_fills.length) {
+                html += '<div style="font-weight:600;margin:8px 0 4px;">待启用品牌补全（启用后重跑对齐生效）：</div>';
+                s.brand_fills.slice(0, 10).forEach(function(b) {
+                    html += '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:4px;">';
+                    html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(b.sku) + '">' + escapeHtml(b.sku) + ' → ' + escapeHtml(b.品牌) + (b.型号 ? '/' + escapeHtml(b.型号) : '') + '（' + escapeHtml(b.店) + '）</span>';
+                    html += '<button class="btn btn-sm" onclick="learnBrand(\'' + escapeHtml(b.sku) + '\',true)">启用</button>';
+                    html += '<button class="btn btn-sm" onclick="learnBrand(\'' + escapeHtml(b.sku) + '\',false)">忽略</button>';
+                    html += '</div>';
+                });
+                if (s.brand_fills.length > 10) html += '<div style="color:#94a3b8;">…共 ' + s.brand_fills.length + ' 条</div>';
+            }
+            document.getElementById('learnBody').innerHTML = html || '<div style="color:#94a3b8;">暂无待启用项。关键词库为空时，可运行 scripts/build_keyword_lib.py 生成种子词库。</div>';
+        })
+        .catch(function(){});
+}
+function learnExtract() {
+    if (!confirm('调用大模型从学习样本提炼同义词（预计几毛到几元）？\n提炼结果需人工启用后才生效。')) return;
+    fetch('/api/learn/extract', {method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}'})
+        .then(function(r){ return r.json(); })
+        .then(function(d) { alert(d.ok ? d.msg : d.msg); if (d.ok) loadLearn(); })
+        .catch(function(e){ alert('提炼失败: ' + e.message); });
+}
+function learnSyn(variant, standard, enable) {
+    fetch('/api/learn/synonym', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({variant: variant, standard: standard, enable: enable})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) { if (d.ok) loadLearn(); })
+    .catch(function(){});
+}
+function learnBrand(sku, enable) {
+    fetch('/api/learn/brand', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({sku: sku, enable: enable})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) { if (d.ok) loadLearn(); })
+    .catch(function(){});
+}
+// ── 补货参考：店↔仓指认 + 销量回填 ──
+var WH = {status: null, inspect: null, timer: null};
+
+function whStateBadge(s) {
+    if (s.state === 'manual') return '<span style="color:#059669;">✓ 已确认 · ' + escapeHtml(s.wh_name || '') + '</span>';
+    if (s.state === 'pending') return '<span style="color:#92400e;">⚠ 系统推定待确认 · ' + escapeHtml(s.wh_name || '') + '</span>';
+    if (s.state === 'no_data') return '<span style="color:#b91c1c;">✗ 已指认「' + escapeHtml(s.wh_name || '') + '」但当期快照无该仓数据</span>';
+    return '<span style="color:#b91c1c;">✗ 未指认补货仓 —— 店对店销量不可用</span>';
+}
+
+function whInit() {
+    fetch('/api/replenish/status').then(function (r) { return r.json(); }).then(function (d) {
+        if (!d || !d.ok) { document.getElementById('whBody').textContent = '状态读取失败'; return; }
+        WH.status = d; whRender();
+    }).catch(function (e) { document.getElementById('whBody').textContent = '状态读取失败：' + e; });
+}
+
+function whRender() {
+    var d = WH.status, h = '', m = d.meta || {};
+    h += '<div style="margin-bottom:6px;">当前生效口径：<b>' + escapeHtml(m.note || '未回填过') + '</b>'
+       + (m.snapshot_date ? '（快照 ' + escapeHtml(String(m.snapshot_date)) + ' · ' + escapeHtml(m.snapshot || '') + '）' : '')
+       + '　当期分仓表实有仓：' + escapeHtml((d.present_wh || []).join('、') || '（无）') + '</div>';
+
+    h += '<div style="font-weight:600;margin:10px 0 4px;">① 自家门店 · 指认状态</div>';
+    (d.stores || []).forEach(function (s) {
+        h += '<div style="padding:2px 0;">' + escapeHtml(s.name) + '（店编码 ' + escapeHtml(s.code || '?') + '）— ' + whStateBadge(s) + '</div>';
+    });
+    if (!(d.stores || []).length) h += '<div style="color:#94a3b8;">（还没导入过自家门店）</div>';
+
+    h += '<div style="font-weight:600;margin:12px 0 4px;">② 选补货参考快照（放在 ' + escapeHtml(d.snap_dir || '') + '）</div>'
+       + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'
+       + '<select id="whFile" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;max-width:520px;">'
+       + (d.snapshots || []).map(function (s) {
+            return '<option value="' + escapeHtml(s.path) + '">' + escapeHtml(s.name) + ' · ' + escapeHtml(s.mtime) + ' · ' + s.size_kb + 'KB</option>';
+         }).join('')
+       + '</select>'
+       + '<button class="btn btn-sm" onclick="whInspect()">🔎 识别这份快照</button>'
+       + '<span id="whMsg" style="font-size:12px;color:#64748b;"></span></div>';
+    if (!(d.snapshots || []).length)
+        h += '<div style="color:#b45309;font-size:12px;margin-top:4px;">目录里没有「前置仓补货参考*.xlsx」——先把每日导出的补货参考文件放进该目录。</div>';
+
+    h += '<div id="whIns" style="margin-top:10px;"></div>';
+    h += '<div id="whAct" style="display:none;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap;">'
+       + '<button class="btn btn-sm" onclick="whApply(true)">👀 预览影响（不写库）</button>'
+       + '<button class="btn btn-green btn-sm" onclick="whApply(false)">✅ 执行回填</button>'
+       + '<span id="whRun" style="font-size:12px;color:#64748b;"></span></div>';
+    h += '<pre id="whLog" style="display:none;background:#0f172a;color:#e2e8f0;padding:10px 12px;border-radius:8px;font-size:12px;margin-top:8px;max-height:260px;overflow:auto;white-space:pre-wrap;"></pre>';
+    document.getElementById('whBody').innerHTML = h;
+    if (WH.inspect) whRenderIns(WH.inspect);
+    if ((WH.status.run || {}).state === 'running') whPoll();
+}
+
+function whInspect() {
+    var sel = document.getElementById('whFile'); if (!sel) return;
+    document.getElementById('whMsg').textContent = '识别中…';
+    fetch('/api/replenish/inspect', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({path: sel.value})
+    }).then(function (r) { return r.json(); }).then(function (d) {
+        document.getElementById('whMsg').textContent = d.ok ? '' : ('失败：' + (d.msg || ''));
+        if (d.ok) { WH.inspect = d; whRenderIns(d); }
+    }).catch(function (e) { document.getElementById('whMsg').textContent = '失败：' + e; });
+}
+
+function whRenderIns(d) {
+    var stores = (WH.status.stores || []);
+    var h = '<div style="font-weight:600;margin-bottom:4px;">③ 这份快照含 ' + (d.warehouses || []).length
+          + ' 个仓 / 共 ' + d.total_rows + ' 行 —— 逐个指认给自家店</div>'
+          + '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">'
+          + '<tr style="color:#64748b;text-align:left;"><th style="padding:4px 6px;">仓（编码）</th><th>行数</th><th>当前指认</th><th style="min-width:260px;">改指认为</th><th></th></tr>';
+    (d.warehouses || []).forEach(function (w, i) {
+        var cur = w.mapped_store
+            ? escapeHtml(w.mapped_store) + (w.source === 'pending' ? ' <span style="color:#92400e;">(推定)</span>' : ' <span style="color:#059669;">(已确认)</span>')
+            : '<span style="color:#b91c1c;">未指认</span>';
+        var opts = '<option value="">（取消指认）</option>' + stores.map(function (s) {
+            return '<option value="' + escapeHtml(s.name) + '"' + (w.suggest_store === s.name ? ' selected' : '') + '>' + escapeHtml(s.name) + '</option>';
+        }).join('');
+        h += '<tr style="border-top:1px solid #e2e8f0;"><td style="padding:4px 6px;">' + escapeHtml(w.wh_name || '') + '（' + escapeHtml(w.code) + '）</td>'
+           + '<td>' + w.rows + '</td><td>' + cur + '</td>'
+           + '<td><select id="whSel' + i + '" style="padding:5px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;max-width:250px;">' + opts + '</select></td>'
+           + '<td><button class="btn btn-sm" onclick="whMap(' + i + ')">指认</button>'
+           + (w.suggest_store ? ' <span style="font-size:11px;color:#94a3b8;">建议：' + escapeHtml(w.suggest_store) + '</span>' : '') + '</td></tr>';
+    });
+    h += '</table>';
+    document.getElementById('whIns').innerHTML = h;
+    var act = document.getElementById('whAct'); if (act) act.style.display = 'flex';
+}
+
+function whMap(i) {
+    var w = (WH.inspect.warehouses || [])[i]; if (!w) return;
+    var sel = document.getElementById('whSel' + i);
+    fetch('/api/replenish/map', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({code: w.code, wh_name: w.wh_name, store_name: sel ? sel.value : ''})
+    }).then(function (r) { return r.json(); }).then(function (d) {
+        if (!d.ok) { alert(d.msg || '指认失败'); return; }
+        WH.inspect.warehouses[i].mapped_store = sel.value;
+        WH.inspect.warehouses[i].source = 'manual';
+        whRenderIns(WH.inspect); whInit();
+    }).catch(function (e) { alert('指认失败：' + e); });
+}
+
+function whApply(dry) {
+    var sel = document.getElementById('whFile'); if (!sel) return;
+    fetch('/api/replenish/apply', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({path: sel.value, dry_run: dry})
+    }).then(function (r) { return r.json(); }).then(function (d) {
+        if (!d.ok) { alert(d.msg || '启动失败'); return; }
+        document.getElementById('whLog').style.display = 'block';
+        document.getElementById('whLog').textContent = dry ? '预览中…' : '回填中…（大表逐行匹配，通常 1-2 分钟）';
+        whPoll();
+    }).catch(function (e) { alert('启动失败：' + e); });
+}
+
+function whPoll() {
+    if (WH.timer) clearTimeout(WH.timer);
+    function tick() {
+        fetch('/api/replenish/status').then(function (r) { return r.json(); }).then(function (d) {
+            var run = d.run || {}, lg = document.getElementById('whLog'), st = document.getElementById('whRun');
+            if (lg) { lg.style.display = 'block'; lg.textContent = run.log || '运行中…'; }
+            if (st) st.textContent = run.state === 'running' ? ('正在跑 ' + (run.file || '') + ' …')
+                       : (run.state === 'done' ? '✔ 完成：' + (run.file || '') : (run.state === 'error' ? '✗ 失败' : ''));
+            if (run.state === 'running') WH.timer = setTimeout(tick, 3000);
+            else { WH.status = d; whRender(); }
+        }).catch(function () {});
+    }
+    WH.timer = setTimeout(tick, 1500);
+}
+/* ── 每日体检 ── */
+function hpLoad(force) {
+  var st = document.getElementById('hpMsg'), body = document.getElementById('hpBody');
+  st.textContent = force ? '重跑中…' : '加载中…';
+  fetch('/api/health' + (force ? '?refresh=1' : ''))
+    .then(function (r) { return r.json(); }).then(function (d) {
+      st.textContent = '';
+      if (!d.ok) { body.textContent = '体检失败：' + (d.msg || ''); return; }
+      var icon = { bad: '🔴', warn: '🟡', ok: '🟢', info: 'ℹ️' };
+      var order = { bad: 0, warn: 1, ok: 2, info: 3 };
+      var its = (d.items || []).slice().sort(function (a, b) {
+        return (order[a.level] || 9) - (order[b.level] || 9);
+      });
+      var h = '<div style="font-weight:600;margin-bottom:6px;">'
+        + (d.verdict === 'red' ? '🔴 ' + d.bad + ' 项需今天处理' : (d.verdict === 'yellow' ? '🟡 ' + d.warn + ' 项建议本周处理' : '🟢 全部正常'))
+        + '　<span style="font-weight:400;color:#94a3b8;font-size:12px;">体检时间 ' + escapeHtml(d.at || '') + '</span></div>';
+      its.forEach(function (i) {
+        h += '<div style="padding:6px 0;border-top:1px solid #f1f5f9;">'
+          + icon[i.level] + ' <b>' + escapeHtml(i.item) + '</b>　' + escapeHtml(i.msg || '')
+          + (i.fix ? '<div style="color:#0369a1;font-size:12px;margin-top:2px;">处置：' + escapeHtml(i.fix) + '</div>' : '')
+          + '</div>';
+      });
+      body.innerHTML = h;
+    }).catch(function (e) { st.textContent = ''; body.textContent = '体检请求失败：' + e; });
+}
+window.onload = function() { loadLearn(); loadOwnStores(); whInit(); hpLoad(false); };
+</script>
+{% include "_assistant.html" %}
+</body>
+</html>

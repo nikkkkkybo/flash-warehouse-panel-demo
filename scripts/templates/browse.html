@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>竞品总览 - 选品面板</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+/* 行内展开简卡 */
+.br-expand { display: none; }
+.br-expand.open { display: table-row; }
+.br-expand > td { background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 12px 16px; }
+.br-card { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.br-card-img { width: 110px; height: 110px; border-radius: 10px; border: 1px solid #e2e8f0;
+               background: #fff; display: flex; align-items: center; justify-content: center;
+               overflow: hidden; flex-shrink: 0; }
+.br-card-img img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.br-card-info { flex: 1; min-width: 240px; }
+.brc-name { font-size: 15px; font-weight: 600; color: #1e293b; margin-bottom: 6px; }
+.brc-meta { font-size: 13px; color: #64748b; line-height: 1.8; }
+.brc-meta b { color: #dc2626; }
+.brc-own { margin-top: 8px; font-size: 13px; color: #059669; background: #ecfdf5;
+           border: 1px solid #bbf7d0; border-radius: 8px; padding: 6px 10px; display: inline-block; }
+.br-card-act { flex-shrink: 0; text-align: center; }
+.br-arrow { color: #94a3b8; font-size: 12px; margin-left: 4px; transition: transform 0.15s; }
+.br-main.open .br-arrow { transform: rotate(180deg); }
+/* AI 预筛徽章 */
+.ai-badge { display: inline-block; margin-left: 4px; padding: 2px 8px; border-radius: 10px;
+            font-size: 11px; font-weight: 600; white-space: nowrap; }
+.ai-yes { background: #dbeafe; color: #1d4ed8; }
+.ai-no { background: #fee2e2; color: #b91c1c; }
+.ai-unsure { background: #f1f5f9; color: #64748b; }
+</style>
+<style>
+    /* 首列固定 + 横向滚动 */
+    .browse-table-wrap { overflow-x: auto; }
+    .fix-col-2 th:nth-child(2), .fix-col-2 td:nth-child(2),
+    .fix-col-3 th:nth-child(3), .fix-col-3 td:nth-child(3) {
+        position: sticky; left: 0; z-index: 2; box-shadow: 2px 0 4px rgba(0,0,0,0.04);
+    }
+    .fix-col-2 td:nth-child(2), .fix-col-3 td:nth-child(3) { background: #fff; }
+    .fix-col-2 tr:hover td:nth-child(2), .fix-col-3 tr:hover td:nth-child(3) { background: #f8fafc; }
+    .fix-col-2 th:nth-child(2), .fix-col-3 th:nth-child(3) { background: #f8fafc; z-index: 3; }
+    .col-cat { white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<div class="container">
+    <!-- 顶部导航 -->
+    {% set active = 'browse' %}
+    {% include "_nav.html" %}
+
+    <header class="main-header">
+        <h1>⚡ 竞争分析面板（全部竞品可见 · 分层收敛：类 → 品 → 规格）</h1>
+        <div class="stats">
+            <a class="stat-item stat-total" href="/browse?shop={{ current_shop }}{{ scope_qs }}">竞品总数 <strong>{{ stats.total if stats else 0 }}</strong></a>
+            <a class="stat-item stat-pending" href="/browse?shop={{ current_shop }}{{ scope_qs }}&status=pending">待处理 <strong>{{ stats.pending if stats else 0 }}</strong></a>
+            <a class="stat-item stat-coarse" href="/browse?shop={{ current_shop }}{{ scope_qs }}&status=coarse">已粗对齐（品） <strong>{{ stats.coarse if stats else 0 }}</strong></a>
+            <a class="stat-item stat-confirmed" href="/browse?shop={{ current_shop }}{{ scope_qs }}&status=aligned">已对应（品+规格） <strong>{{ stats.aligned if stats else 0 }}</strong></a>
+            <a class="stat-item stat-nomatch" href="/browse?shop={{ current_shop }}{{ scope_qs }}&status=nomatch">无对应 <strong>{{ stats.nomatch if stats else 0 }}</strong></a>
+        </div>
+        {% if zone_name %}<div class="sub" style="text-align:center;margin-top:4px;">当前范围：<b>🗺️ {{ zone_name }}</b>（区合并视图 · 店铺列标明来源店；AI预筛请进单店视图使用）</div>
+        {% elif current_shop %}<div class="sub" style="text-align:center;margin-top:4px;">当前店铺：<b>{{ current_shop }}</b>
+            （点击统计数字可查看对应状态的商品；点行展开对照卡；店铺改名请到「工具 → 导入数据」的管理区）</div>
+        {% else %}<div class="sub" style="text-align:center;margin-top:4px;">当前范围：全部店铺（{{ shops|length }} 家，点击数字可查看对应状态）</div>{% endif %}
+        {% if obs_last %}<div class="sub" style="text-align:center;margin-top:2px;font-size:11px;color:#94a3b8;">📅 竞品数据截至 {{ obs_last[:16] }}（价格观测历史最新一次导入）</div>{% endif %}
+    </header>
+
+    <main>
+        <!-- 全站范围选择条（P0.1）：全部/区/单店；browse 为竞品侧页面，自家维度不显示 -->
+        {% set scope_hide_own = true %}
+        {% include "_scope.html" %}
+
+        <!-- 筛选区：搜索 + 品牌/类目/收敛层级下拉 + 状态 + 收窄选项 -->
+        <form class="browse-filter" method="get" action="/browse">
+            <input type="hidden" name="shop" value="{{ current_shop }}">
+            {% if zone_name %}<input type="hidden" name="zone" value="{{ zone_name }}">{% endif %}
+            <input type="text" name="q" value="{{ q }}" placeholder="搜索商品名 / 品牌 / 编号..." class="browse-search">
+            <input type="text" name="brand" list="brand-list" value="{{ brand }}" placeholder="品牌（可输入搜索）" class="browse-select browse-search" style="min-width:150px;">
+            <datalist id="brand-list">
+                {% for b in brands %}<option value="{{ b }}">{% endfor %}
+            </datalist>
+            <input type="text" name="cat" list="cat-list" value="{{ cat }}" placeholder="类目（可输入搜索）" class="browse-select browse-search" style="min-width:150px;">
+            <datalist id="cat-list">
+                {% for c in cats %}<option value="{{ c }}">{% endfor %}
+            </datalist>
+            <select name="level" class="browse-select">
+                <option value="" {% if not level %}selected{% endif %}>全部收敛层级</option>
+                <option value="none" {% if level == 'none' %}selected{% endif %}>未收敛（机器无把握）</option>
+                <option value="cat" {% if level == 'cat' %}selected{% endif %}>类已锁定</option>
+                <option value="spu" {% if level == 'spu' %}selected{% endif %}>品已锁定（已粗对齐）</option>
+                <option value="sku" {% if level == 'sku' %}selected{% endif %}>规格已锁定（已对应）</option>
+            </select>
+            <select name="status" class="browse-select">
+                <option value="all" {% if status == 'all' %}selected{% endif %}>全部状态</option>
+                <option value="pending" {% if status == 'pending' %}selected{% endif %}>待处理</option>
+                <option value="coarse" {% if status == 'coarse' %}selected{% endif %}>已粗对齐</option>
+                <option value="aligned" {% if status == 'aligned' %}selected{% endif %}>已对应</option>
+                <option value="nomatch" {% if status == 'nomatch' %}selected{% endif %}>无对应</option>
+            </select>
+            <label class="browse-check" title="只显示还未处理完的（待处理+已粗对齐）">
+                <input type="checkbox" name="untreated" value="1" {% if untreated %}checked{% endif %}> 仅看待处理
+            </label>
+            <label class="browse-check" title="只显示类目映射已确认的竞品（搜索收窄）">
+                <input type="checkbox" name="only_cat" value="1" {% if only_cat %}checked{% endif %}> 仅锁定类目
+            </label>
+            <button type="submit" class="btn">筛选</button>
+        </form>
+
+        <div class="list-header">
+            <h2>竞品列表
+                <span class="page-info">第 {{ page }} / {{ total_pages }} 页（{{ total }} 条）</span>
+            </h2>
+            {% if zone_name %}<div class="sub">当前范围：🗺️ {{ zone_name }}（区合并）· 确认对应在行内/详情页完成；跨店绑定组见 <a href="/pool">候选池</a></div>
+            {% elif current_shop %}<div class="sub">当前店铺：{{ current_shop }} · 确认对应在行内/详情页完成；跨店绑定组见 <a href="/pool">候选池</a></div>{% endif %}
+        </div>
+
+        {% if focus_n %}
+        <div style="margin:6px 0 10px;padding:8px 12px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;font-size:13px;color:#0f766e;">
+            🎯 <b>AI 关注的 {{ focus_n }} 个品</b>（来自小助手本轮点名）
+            <a href="?shop={{ current_shop or '' }}" style="margin-left:12px;color:#0d9488;">清除筛选，看全部 →</a>
+        </div>
+        {% endif %}
+
+        {% if status in ('all', 'pending') %}
+        <div class="run-bar" style="margin:8px 0;">
+            <button class="btn" onclick="skipLowValue()">⏭ 跳过低价值候选（月售&lt;10，标为无对应）</button>
+            <button class="btn btn-blue" id="prescreenBtn" onclick="runPrescreen()">🤖 AI预筛本店待处理</button>
+            <span id="prescreenStatus" style="font-size:12px;color:#64748b;"></span>
+            <span id="skipStatus" style="font-size:12px;color:#64748b;"></span>
+            <span style="margin-left:auto;">
+                <a href="javascript:void(0)" id="aiKeyChip" onclick="toggleAiKeyBox()"
+                   style="font-size:12px;text-decoration:none;" title="模型接口配置（DeepSeek key）">🔑 AI接口：检测中…</a>
+            </span>
+        </div>
+        <div id="aiKeyBox" style="display:none;margin:6px 0;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+            <div style="font-size:13px;font-weight:600;margin-bottom:6px;">模型接口配置（OpenAI 兼容可换；key 仅存本机 config/ai_config.yaml）</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+                <label style="font-size:12px;color:#64748b;">供应商</label>
+                <select id="aiPreset" onchange="applyAiPreset()" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;">
+                    <option value="">（选择预设）</option>
+                </select>
+                <label style="font-size:12px;color:#64748b;">驱动</label>
+                <select id="aiDriver" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;">
+                    <option value="real">real（真实接口）</option>
+                    <option value="fake">fake（演示，不花钱）</option>
+                </select>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+                <input type="password" id="aiKeyInput" placeholder="API key（sk-…）"
+                       style="flex:1;min-width:220px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;">
+                <input type="text" id="aiBaseUrl" placeholder="https://api.deepseek.com"
+                       style="flex:1;min-width:200px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;">
+                <input type="text" id="aiModel" placeholder="deepseek-chat"
+                       style="width:140px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;">
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <button class="btn" onclick="saveAiKey()">保存配置</button>
+                <button class="btn" onclick="testAiConn()">测试连通</button>
+                <span style="font-size:11px;color:#94a3b8;" id="aiSpend"></span>
+            </div>
+            <div id="aiKeyMsg" style="font-size:12px;color:#64748b;margin-top:6px;"></div>
+        </div>
+        <div class="sub" style="margin:2px 0 0;font-size:12px;">
+            AI预筛：批量让大模型预判待处理品是否同品，结论挂徽章（<span class="ai-badge ai-yes">AI同品85</span>
+            <span class="ai-badge ai-no">AI不同90</span> <span class="ai-badge ai-unsure">AI存疑55</span>），
+            只作参考不自动入库；每条约0.1分钱，已预筛/已确认的不重复调用。
+        </div>
+        {% endif %}
+
+        {% if not items %}
+        <div class="empty-tip">暂无竞品数据。请先到「工具 → 导入数据」上传竞店 Excel，系统将自动完成入库与对齐。</div>
+        {% else %}
+        <div class="browse-table-wrap">
+        <table class="candidate-table browse-table {% if current_shop %}fix-col-2{% else %}fix-col-3{% endif %}">
+            <thead>
+                <tr>
+                    <th class="col-thumb">图</th>
+                    {% if not current_shop %}<th class="col-shop">店铺</th>{% endif %}
+                    <th class="col-comp-name">竞品商品名（点名称看详情）</th>
+                    <th class="col-brand">品牌</th>
+                    <th class="col-cat">型号/类目</th>
+                    <th class="col-price">
+                        <a class="sort-link" href="/browse?shop={{ current_shop }}{{ scope_qs }}&q={{ q }}&brand={{ brand }}&cat={{ cat }}&status={{ status }}&level={{ level }}&untreated={{ '1' if untreated else '' }}&only_cat={{ '1' if only_cat else '' }}&sort=price&order={% if sort == 'price' and order == 'asc' %}desc{% else %}asc{% endif %}" title="点击按价格排序">
+                            价格 {% if sort == 'price' %}{% if order == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}
+                            <span style="font-size:10px;color:#94a3b8;font-weight:400;">到手/原价</span>
+                        </a>
+                    </th>
+                    <th class="col-sales">
+                        <a class="sort-link" href="/browse?shop={{ current_shop }}{{ scope_qs }}&q={{ q }}&brand={{ brand }}&cat={{ cat }}&status={{ status }}&level={{ level }}&untreated={{ '1' if untreated else '' }}&only_cat={{ '1' if only_cat else '' }}&sort=sales&order={% if sort == 'sales' and order == 'asc' %}desc{% else %}asc{% endif %}" title="点击按月售排序">
+                            月售 {% if sort == 'sales' %}{% if order == 'asc' %}▲{% else %}▼{% endif %}{% else %}⇅{% endif %}
+                        </a>
+                    </th>
+                    <th class="col-status">状态</th>
+                    <th class="col-action">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr class="br-main" onclick="toggleBr({{ loop.index }}, this)" style="cursor:pointer;">
+                    <td class="col-thumb">
+                        {% if item.图片 %}
+                        <img class="browse-thumb" src="{{ item.图片 | img }}" loading="lazy"
+                             onerror="this.style.display='none';this.parentNode.innerHTML='<span class=no-thumb>无图</span>';">
+                        {% else %}<span class="no-thumb">无图</span>{% endif %}
+                    </td>
+                    {% if not current_shop %}<td class="col-shop" title="{{ item.店铺 }}">{{ item.店铺 }}</td>{% endif %}
+                    <td class="col-comp-name">
+                        <a class="detail-link" href="/comp_detail?shop={{ item.店铺 }}&sku={{ item.Sku_id }}" title="点击查看该竞品详情" onclick="event.stopPropagation();">{{ item.商品名 }}</a>
+                        <span class="br-arrow">▾</span>
+                    </td>
+                    <td class="col-brand">{{ item.品牌 }}</td>
+                    <td class="col-cat" title="型号：{{ item.型号 }}；类目：{{ item.类目 }}">
+                        {% if item.型号 %}{{ item.型号 }}{% else %}<span style="color:#cbd5e1;">—</span>{% endif %}
+                        <span style="color:#94a3b8;font-size:11px;">{{ item.类目 }}</span>
+                    </td>
+                    <td class="col-price">
+                        ¥{{ item.价格 }}{% if item.原价 and item.原价 != item.价格 %}<del class="price-orig">¥{{ item.原价 }}</del>{% endif %}
+                        {% if item.折扣 %}<span class="zk-badge">{{ item.折扣 }}</span>{% endif %}
+                        {% if item.较上次 is not none %}
+                        {% if item.较上次 > 0 %}<span class="diff-badge diff-up" title="较上次观测涨价（自家相对更有优势）">↑+{{ item.较上次 }}</span>
+                        {% else %}<span class="diff-badge diff-down" title="较上次观测降价（注意竞品降价动作）">↓{{ item.较上次 }}</span>{% endif %}
+                        {% endif %}
+                        {% if item.观测期数 and item.观测期数 >= 2 %}<span class="obs-chip" title="该品共 {{ item.观测期数 }} 次导入观测（详情页看历史轨迹）">{{ item.观测期数 }}期</span>{% endif %}
+                        {% if item.分位 is not none %}
+                        {% if item.分位 >= 67 %}<span class="pct-badge pct-hi" title="该品价格高于同类 {{ item.分位 }}% 的竞品 SKU">同类偏贵</span>
+                        {% elif item.分位 <= 33 %}<span class="pct-badge pct-lo" title="该品价格低于同类 {{ 100 - item.分位 }}% 的竞品 SKU（仅 {{ item.分位 }}% 比它便宜）">同类偏低</span>
+                        {% else %}<span class="pct-badge pct-mid" title="价格位于同类中段（分位 {{ item.分位 }}%）">同类中等</span>{% endif %}
+                        {% endif %}
+                        {% if item.价差 is not none %}
+                        {% if item.价差 >= 0 %}<span class="diff-badge diff-up" title="竞品到手价 - 自家售价（正=竞品贵，自家有价格优势）">↑贵{{ item.价差 }}</span>
+                        {% else %}<span class="diff-badge diff-down" title="竞品到手价 - 自家售价（负=竞品便宜，自家偏贵）">↓省{{ -item.价差 }}</span>{% endif %}
+                        {% endif %}
+                    </td>
+                    <td class="col-sales">{{ item.月售 }}</td>
+                    <td class="col-status" title="收敛层级：{% if item.收敛层级 == 'sku' %}规格已锁定{% elif item.收敛层级 == 'spu' %}品已锁定{% elif item.收敛层级 == 'cat' %}类已锁定{% else %}未收敛{% endif %}">
+                        {% if item.状态 == 'aligned' %}
+                        <span class="badge status-confirmed">已对应</span>
+                        {% elif item.状态 == 'coarse' %}
+                        <span class="badge status-coarse">已粗对齐</span>
+                        {% elif item.状态 == 'nomatch' %}
+                        <span class="badge status-nomatch">无对应</span>
+                        {% if item.AI预筛 %}
+                        {% set ai_cls = 'ai-yes' if item.AI预筛.startswith('AI同品') else ('ai-no' if item.AI预筛.startswith('AI不同') else 'ai-unsure') %}
+                        <span class="ai-badge {{ ai_cls }}" title="AI预筛理由：{{ item.AI预筛理由 or '（无）' }}">🤖{{ item.AI预筛 }}</span>
+                        <a href="javascript:void(0)" onclick="brUndo('{{ item.店铺 | e }}','{{ item.Sku_id | e }}',this,true)" style="font-size:11px;color:#94a3b8;margin-left:4px;text-decoration:none;" title="撤销AI判无对应（删除标记+拉黑，回人工池）">↩撤销AI</a>
+                        {% endif %}
+                        {% else %}
+                        <span class="badge status-pending">待处理</span>
+                        {% if item.AI预筛 %}
+                        {% set ai_cls = 'ai-yes' if item.AI预筛.startswith('AI同品') else ('ai-no' if item.AI预筛.startswith('AI不同') else 'ai-unsure') %}
+                        <span class="ai-badge {{ ai_cls }}" title="AI预筛理由：{{ item.AI预筛理由 or '（无）' }}">🤖{{ item.AI预筛 }}</span>
+                        {% if '已分流' in item.AI预筛 %}
+                        <a href="javascript:void(0)" onclick="brUndo('{{ item.店铺 | e }}','{{ item.Sku_id | e }}',this,true)" style="font-size:11px;color:#94a3b8;margin-left:4px;text-decoration:none;" title="撤销AI分流（删汇总库AI行+拉黑，回人工池）">↩撤销AI</a>
+                        {% endif %}
+                        {% endif %}
+                        {% endif %}
+                    </td>
+                    <td class="col-action" onclick="event.stopPropagation();">
+                        {% if item.状态 == 'coarse' %}
+                        <a href="/comp_detail?shop={{ item.店铺 }}&sku={{ item.Sku_id }}" class="btn btn-sm btn-green">补规格 →</a>
+                        {% if item.自家商品名 %}<span class="own-ref" title="已粗对齐：品已对应，规格待补">{{ item.自家商品名 }}</span>{% endif %}
+                        {% elif item.状态 == 'pending' %}
+                        <a href="/comp_detail?shop={{ item.店铺 }}&sku={{ item.Sku_id }}" class="btn btn-sm btn-blue">确认品 →</a>
+                        {% elif item.状态 == 'nomatch' %}
+                        <a href="/comp_detail?shop={{ item.店铺 }}&sku={{ item.Sku_id }}" class="btn btn-sm btn-gray">恢复/重查</a>
+                        {% endif %}
+                        {% if item.状态 == 'aligned' %}
+                        <span class="own-ref" title="{{ item.自家SKUID }}">{{ item.自家商品名 }}</span>
+                        <a href="javascript:void(0)" onclick="brUndo('{{ item.店铺 | e }}','{{ item.Sku_id | e }}',this)" style="font-size:11px;color:#94a3b8;margin-left:6px;text-decoration:none;" title="撤销该规格对应（汇总库同步删行）">↩撤销</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                <!-- 行内展开：对照简卡 -->
+                <tr class="br-expand" id="bex{{ loop.index }}">
+                    <td colspan="{% if current_shop %}8{% else %}9{% endif %}">
+                        <div class="br-card">
+                            <div class="br-card-img">
+                                {% if item.图片 %}
+                                <img src="{{ item.图片 | img }}" onerror="this.style.display='none';">
+                                {% else %}<span style="color:#cbd5e1;font-size:12px;">无图</span>{% endif %}
+                            </div>
+                            <div class="br-card-info">
+                                <div class="brc-name">{{ item.商品名 }}</div>
+                                <div class="brc-meta">品牌 {{ item.品牌 or '（无）' }} · 型号 {{ item.型号 or '—' }} · 类目 {{ item.类目 or '—' }}</div>
+                                <div class="brc-meta">到手价 <b>¥{{ item.价格 }}</b>{% if item.原价 and item.原价 != item.价格 %} <del class="price-orig">原价¥{{ item.原价 }}</del>{% endif %}{% if item.折扣 %} <span class="zk-badge">{{ item.折扣 }}</span>{% endif %} · 月售 <b>{{ item.月售 }}</b></div>
+                                {% if item.自家商品名 %}
+                                <div class="brc-own">🏠 对应自家：{{ item.自家商品名 }}{% if item.自家售价 %} · 自家售 <span class="own-price-chip">¥{{ item.自家售价 }}</span>{% endif %}
+                                    {% if item.价差 is not none %}{% if item.价差 >= 0 %}<span class="diff-badge diff-up" title="竞品贵 {{ item.价差 }} 元，自家有价格优势">竞贵+{{ item.价差 }}</span>{% else %}<span class="diff-badge diff-down" title="竞品便宜 {{ -item.价差 }} 元，自家偏贵">竞省{{ -item.价差 }}</span>{% endif %}{% endif %}
+                                    {% if item.匹配依据 %} <span style="color:#94a3b8;">（{{ item.匹配依据 }}）</span>{% endif %}</div>
+                                {% elif item.状态 == 'nomatch' %}
+                                <div class="brc-own" style="color:#64748b;">📭 自家无对应</div>
+                                {% else %}
+                                <div class="brc-own" style="color:#d97706;">❓ 待确认对应</div>
+                                {% endif %}
+                            </div>
+                            <div class="br-card-act">
+                                <a href="/comp_detail?shop={{ item.店铺 }}&sku={{ item.Sku_id }}" class="btn btn-sm btn-blue">
+                                    {% if item.状态 == 'pending' %}去确认对应 →{% elif item.状态 == 'coarse' %}去补规格 →{% else %}查看详情 →{% endif %}
+                                </a>
+                                <div style="font-size:11px;color:#94a3b8;margin-top:6px;">详情页=匹配现场（候选/搜索/确认）</div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div><!-- /browse-table-wrap -->
+        {% endif %}
+
+        <div class="pagination">
+            {% if page > 1 %}
+            <a href="/browse?page={{ page - 1 }}&shop={{ current_shop }}{{ scope_qs }}&q={{ q }}&brand={{ brand }}&cat={{ cat }}&status={{ status }}&level={{ level }}&untreated={{ '1' if untreated else '' }}&only_cat={{ '1' if only_cat else '' }}&sort={{ sort }}&order={{ order }}" class="btn">← 上一页</a>
+            {% endif %}
+            <span class="page-info">{{ page }} / {{ total_pages }}</span>
+            {% if page < total_pages %}
+            <a href="/browse?page={{ page + 1 }}&shop={{ current_shop }}{{ scope_qs }}&q={{ q }}&brand={{ brand }}&cat={{ cat }}&status={{ status }}&level={{ level }}&untreated={{ '1' if untreated else '' }}&only_cat={{ '1' if only_cat else '' }}&sort={{ sort }}&order={{ order }}" class="btn">下一页 →</a>
+            {% endif %}
+        </div>
+    </main>
+</div>
+<script>
+// 行内展开（点行切换对照简卡）
+function toggleBr(i, row) {
+    var ex = document.getElementById('bex' + i);
+    if (!ex) return;
+    var open = ex.classList.toggle('open');
+    if (row) row.classList.toggle('open', open);
+}
+/* ===== 撤销对应（SKU 粒度；ai=true 撤销 AI 预筛分流并拉黑） ===== */
+function brUndo(shop, sku, btn, ai) {
+    var msg = ai
+        ? '撤销该规格的 AI 分流？\\n将删除汇总库 AI预筛行 / AI无对应标记，加拉黑名单（不再自动分流），回人工池。'
+        : '撤销该规格的对应？\\n将删除 progress 与汇总库对应行，刷新后状态变为待处理。';
+    if (!confirm(msg)) return;
+    var orig = btn.innerHTML; btn.innerHTML = '⏳';
+    fetch('/api/confirm_undo', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ shop: shop, sku: sku, ai: ai === true })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ alert(d.msg || (d.ok?'已撤销':'失败')); if (d.ok) location.reload(); else btn.innerHTML = orig; })
+    .catch(function(e){ alert('请求出错: ' + e.message); btn.innerHTML = orig; });
+}
+// 跳过低价值候选（月售<10，标为无对应）
+function skipLowValue() {
+    const params = new URLSearchParams(location.search);
+    const shop = params.get('shop') || '';
+    if (!confirm('将把当前范围内「月售低于10」的待处理候选标记为无对应（备注：低价值跳过）。\n确定跳过？')) return;
+    const st = document.getElementById('skipStatus');
+    st.textContent = '处理中...';
+    fetch('/api/pending_skip', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shop: shop, threshold: 10})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        st.textContent = '';
+        alert(d.ok ? d.msg : d.msg);
+        if (d.ok) window.location.reload();
+    })
+    .catch(function(e){ st.textContent = ''; alert('请求出错: ' + e.message); });
+}
+// AI 预筛（批量标注待处理，后台跑，徽章随轮询刷新）
+var _psTimer = null;
+/* ===== 模型接口配置（工具栏入口；OpenAI 兼容可换，M7阶段5） ===== */
+var _aiPresets = [];
+function applyAiPreset() {
+    var sel = document.getElementById('aiPreset');
+    if (!sel) return;
+    var i = parseInt(sel.value, 10);
+    if (isNaN(i) || !_aiPresets[i]) return;
+    var p = _aiPresets[i];
+    if (p.base_url) document.getElementById('aiBaseUrl').value = p.base_url;
+    if (p.model) document.getElementById('aiModel').value = p.model;
+}
+function loadAiKeyStatus() {
+    fetch('/api/ai/config/status')
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        var chip = document.getElementById('aiKeyChip');
+        if (!chip) return;
+        if (d.ok && d.configured) {
+            chip.textContent = '🔑 AI接口：已接入（' + (d.model || '') + (d.driver === 'fake' ? '·演示' : '') + '）';
+            chip.style.color = '#10b981';
+        } else {
+            chip.textContent = '🔑 AI接口：未配置（点此接入）';
+            chip.style.color = '#dc2626';
+        }
+        if (d.ok) {
+            var bu = document.getElementById('aiBaseUrl');
+            var mo = document.getElementById('aiModel');
+            var dr = document.getElementById('aiDriver');
+            if (bu && d.base_url && !bu.value) bu.value = d.base_url;
+            if (mo && d.model && !mo.value) mo.value = d.model;
+            if (dr && d.driver) dr.value = d.driver;
+            var sp = document.getElementById('aiSpend');
+            if (sp && d.spend) sp.textContent = '累计 ' + (d.spend.calls || 0) + ' 次 ≈¥' + (d.spend.cost_est || 0);
+            var sel = document.getElementById('aiPreset');
+            if (sel && d.presets && d.presets.length && !sel.options.length) {
+                _aiPresets = d.presets;
+                sel.innerHTML = '<option value="">（选择预设）</option>' + d.presets.map(function(p, i) {
+                    return '<option value="' + i + '">' + p.name + '</option>';
+                }).join('');
+            }
+        }
+    })
+    .catch(function(){ var chip = document.getElementById('aiKeyChip'); if (chip) { chip.textContent = '🔑 AI接口：状态未知'; chip.style.color = '#94a3b8'; } });
+}
+function toggleAiKeyBox() {
+    var box = document.getElementById('aiKeyBox');
+    if (box) {
+        var show = (box.style.display === 'none' || !box.style.display);
+        box.style.display = show ? 'block' : 'none';
+        if (show) loadAiKeyStatus();
+    }
+}
+function saveAiKey() {
+    var key = document.getElementById('aiKeyInput').value.trim();
+    var baseUrl = document.getElementById('aiBaseUrl').value.trim();
+    var model = document.getElementById('aiModel').value.trim();
+    var driver = document.getElementById('aiDriver').value;
+    var msg = document.getElementById('aiKeyMsg');
+    var body = {};
+    if (key) body.api_key = key;
+    if (baseUrl) body.base_url = baseUrl;
+    if (model) body.model = model;
+    if (driver) body.driver = driver;
+    if (!Object.keys(body).length) { alert('请至少填写 key / 接口地址 / 模型 之一'); return; }
+    msg.textContent = '保存中...';
+    fetch('/api/ai/config', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        msg.textContent = d.ok ? '已保存，可点「测试连通」验证' : ('保存失败: ' + d.msg);
+        msg.style.color = d.ok ? '#10b981' : '#dc2626';
+        if (d.ok) { document.getElementById('aiKeyInput').value = ''; loadAiKeyStatus(); }
+    })
+    .catch(function(e){ msg.textContent = '保存失败: ' + e.message; msg.style.color = '#dc2626'; });
+}
+function testAiConn() {
+    var msg = document.getElementById('aiKeyMsg');
+    msg.style.color = '#64748b';
+    msg.textContent = '测试中（发一次最小调用，约10 token）...';
+    fetch('/api/ai/config/test', {method: 'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        msg.textContent = d.ok ? ('✓ ' + d.msg + '，模型回复: ' + (d.reply || '')) : ('✗ ' + d.msg);
+        msg.style.color = d.ok ? '#10b981' : '#dc2626';
+    })
+    .catch(function(e){ msg.textContent = '测试出错: ' + e.message; msg.style.color = '#dc2626'; });
+}
+window.addEventListener('DOMContentLoaded', loadAiKeyStatus);
+function runPrescreen() {
+    const params = new URLSearchParams(location.search);
+    const shop = params.get('shop') || '';
+    if (!shop) { alert('请先选择一家店铺（左上店铺区点击店名进入单店视图），跨店视图不支持批量预筛。'); return; }
+    if (!confirm('将调用大模型批量预判「' + shop + '」的待处理竞品（默认最多100条）。\n标注模式：结论挂徽章仅供参考；\n分流模式(triage)：高置信自动写汇总库(待抽检)/判无对应，均可撤销。\n确定开始？')) return;
+    const st = document.getElementById('prescreenStatus');
+    const btn = document.getElementById('prescreenBtn');
+    btn.disabled = true;
+    st.textContent = '启动中...';
+    fetch('/api/ai/prescreen', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shop: shop, limit: 100})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        if (!d.ok) { st.textContent = ''; btn.disabled = false; alert(d.msg || '启动失败'); return; }
+        _pollPrescreen(shop);
+    })
+    .catch(function(e){ st.textContent = ''; btn.disabled = false; alert('请求出错: ' + e.message); });
+}
+function _pollPrescreen(shop) {
+    const st = document.getElementById('prescreenStatus');
+    const btn = document.getElementById('prescreenBtn');
+    if (_psTimer) clearInterval(_psTimer);
+    _psTimer = setInterval(function() {
+        fetch('/api/ai/prescreen/status?shop=' + encodeURIComponent(shop))
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+            const s = (d && d.status) || {};
+            if (s.running) {
+                st.textContent = '预筛中 ' + (s.done || 0) + '/' + (s.total || '?') +
+                                 '（失败 ' + (s.fail || 0) + '）';
+            } else {
+                clearInterval(_psTimer); _psTimer = null;
+                btn.disabled = false;
+                if (s.last_err) { st.textContent = '失败: ' + s.last_err; return; }
+                const dist = s.dist || {};
+                const tri = s.last_triage;
+                let triTxt = '';
+                if (tri && !tri.skipped) {
+                    triTxt = ' | 分流: 自动确认 ' + (tri.auto_confirm || 0) +
+                             ' / 自动无对应 ' + (tri.auto_no_match || 0) +
+                             ' / 留人工 ' + (tri.stay_manual || 0);
+                }
+                st.textContent = '完成：同品 ' + (dist['是'] || 0) + ' | 不同 ' + (dist['否'] || 0) +
+                                 ' | 存疑 ' + (dist['拿不准'] || 0) + triTxt +
+                                 '（本店累计 ' + (s.shop_prescreened || 0) + ' 条）';
+                let msg = '预筛完成：同品 ' + (dist['是'] || 0) + ' / 不同 ' + (dist['否'] || 0) +
+                          ' / 存疑 ' + (dist['拿不准'] || 0) + '。';
+                if (tri && !tri.skipped) {
+                    msg += '\n分流落地：自动确认 ' + (tri.auto_confirm || 0) +
+                           '（汇总库待抽检）/ 自动无对应 ' + (tri.auto_no_match || 0) +
+                           ' / 留人工 ' + (tri.stay_manual || 0) + '。';
+                }
+                msg += '\n刷新页面查看徽章？（建议筛选「待处理」查看）';
+                if (confirm(msg)) {
+                    window.location.reload();
+                }
+            }
+        })
+        .catch(function(){ /* 轮询失败静默，下轮再试 */ });
+    }, 2000);
+}
+</script>
+{% include "_assistant.html" %}
+</body>
+</html>

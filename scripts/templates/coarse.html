@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>粗对齐（品级）- 人工确认</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+    <!-- 顶部导航 -->
+    <nav class="top-nav">
+        <span class="nav-brand">⚡ 闪电仓选品</span>
+        <a href="/" class="nav-link">竞品总览</a>
+        <a href="/confirm" class="nav-link">人工确认</a>
+        <a href="/advice" class="nav-link">已对齐建议</a>
+        <a href="/reverse" class="nav-link">反向查询</a>
+        <a href="/import" class="nav-link">导入新表</a>
+        <a href="/analysis" class="nav-link">选店分析</a>
+    </nav>
+
+    <header class="main-header">
+        <h1>⚡ 粗对齐（品级）——先认品，再认规格</h1>
+        <div class="stats">
+            <div class="stat-item stat-total">待确认竞品 <strong id="coarseTotal">-</strong></div>
+            <div class="stat-item stat-confirmed">已确认品对 <strong id="coarseAligned">-</strong></div>
+        </div>
+    </header>
+
+    <!-- 层级切换 Tab -->
+    <div class="status-tabs">
+        <a href="/coarse" class="status-tab active">粗对齐（品级）</a>
+        <a href="/confirm" class="status-tab">细对齐（规格）</a>
+    </div>
+
+    <main>
+        <!-- 店铺切换器 -->
+        <div class="shop-switcher" id="shopSwitcher"></div>
+
+        <!-- 筛选区 -->
+        <form class="browse-filter" method="get" action="/coarse">
+            <input type="hidden" name="shop" id="shopInput" value="">
+            <input type="text" name="q" id="qInput" placeholder="搜索商品名 / 品牌 / 编号..." class="browse-search">
+            <select name="brand" id="brandSel" class="browse-select">
+                <option value="">全部品牌</option>
+            </select>
+            <select name="cat" id="catSel" class="browse-select">
+                <option value="">全部类目</option>
+            </select>
+            <button type="submit" class="btn">筛选</button>
+        </form>
+
+        <div class="list-header">
+            <h2>待确认竞品（未对齐）
+                <span class="page-info" id="pageInfo"></span>
+            </h2>
+            <div class="sub">处理方式：点「处理」进详情（可手动对应 / 仅确认品级）；「🤖 判断」用大模型辅助判断（可选，点才花钱）。</div>
+        </div>
+
+        <!-- 批量大模型判断 -->
+        <div class="run-bar" style="margin:10px 0;">
+            <button class="btn" id="batchJudgeBtn" onclick="startBatchJudge()">🤖 批量大模型判断（当前筛选）</button>
+            <span id="batchJudgeStatus" style="font-size:13px;color:#1e40af;"></span>
+        </div>
+        <div id="judgeResultPanel" style="display:none;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px;margin-bottom:14px;"></div>
+
+        <div id="coarseList"></div>
+
+        <div class="list-header" style="margin-top:24px;">
+            <h2>已确认品对（SPU 层）<span class="page-info" id="alignedInfo"></span></h2>
+        </div>
+        <div id="alignedList"></div>
+
+        <!-- 学习管理 -->
+        <div class="upload-card" style="margin-top:24px;">
+            <div class="mapping-title">📚 学习管理（确认反哺，越用越准）</div>
+            <div class="upload-hint">每次确认都会记入学习样本；品牌补全启用后重跑对齐生效；同义词启用后重跑归一化生效。</div>
+            <div style="margin:10px 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                <span id="learnStat" style="font-size:13px;color:#475569;"></span>
+                <button class="btn btn-sm" onclick="learnExtract()">✨ 提炼同义词（大模型）</button>
+            </div>
+            <div id="learnBody" style="font-size:13px;"></div>
+        </div>
+    </main>
+</div>
+
+<script>
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+let shops = [];
+let currentShop = '';
+
+function loadShops() {
+    fetch('/api/analysis/shops')
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+            shops = (d.shops || []).map(function(s){ return s.name; });
+            const params = new URLSearchParams(location.search);
+            currentShop = params.get('shop') || (shops.length ? shops[0] : '');
+            document.getElementById('shopInput').value = currentShop;
+            renderShopSwitcher();
+            loadQueue();
+        })
+        .catch(function(){});
+}
+
+function renderShopSwitcher() {
+    const box = document.getElementById('shopSwitcher');
+    let html = '';
+    shops.forEach(function(s) {
+        const active = (s === currentShop) ? ' active' : '';
+        html += '<a href="/coarse?shop=' + encodeURIComponent(s) + '" class="shop-chip' + active + '">' + escapeHtml(s) + '</a>';
+    });
+    box.innerHTML = html;
+}
+
+function loadQueue() {
+    if (!currentShop) return;
+    const params = new URLSearchParams(location.search);
+    const q = params.get('q') || '';
+    const brand = params.get('brand') || '';
+    const cat = params.get('cat') || '';
+    const page = params.get('page') || '1';
+    document.getElementById('qInput').value = q;
+    document.getElementById('brandSel').value = brand;
+    document.getElementById('catSel').value = cat;
+
+    fetch('/api/coarse_queue?shop=' + encodeURIComponent(currentShop) +
+          '&q=' + encodeURIComponent(q) + '&brand=' + encodeURIComponent(brand) +
+          '&cat=' + encodeURIComponent(cat) + '&page=' + page)
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+            if (!d.ok) { document.getElementById('coarseList').innerHTML = '<div class="empty-tip">' + escapeHtml(d.msg || '加载失败') + '</div>'; return; }
+            document.getElementById('coarseTotal').textContent = d.total;
+            document.getElementById('coarseAligned').textContent = d.aligned_count;
+            document.getElementById('pageInfo').textContent = '第 ' + d.page + ' / ' + d.total_pages + ' 页（' + d.total + ' 条）';
+            document.getElementById('alignedInfo').textContent = d.aligned_count + ' 对';
+            renderList(d);
+            renderAligned(d.aligned);
+            // 品牌/类目下拉选项
+            const bs = document.getElementById('brandSel');
+            bs.innerHTML = '<option value="">全部品牌</option>' + d.brands.map(function(b){ return '<option value="' + escapeHtml(b) + '"' + (b === brand ? ' selected' : '') + '>' + escapeHtml(b) + '</option>'; }).join('');
+            const cs = document.getElementById('catSel');
+            cs.innerHTML = '<option value="">全部类目</option>' + d.cats.map(function(c){ return '<option value="' + escapeHtml(c) + '"' + (c === cat ? ' selected' : '') + '>' + escapeHtml(c) + '</option>'; }).join('');
+        })
+        .catch(function(e){ document.getElementById('coarseList').innerHTML = '<div class="empty-tip">加载失败: ' + escapeHtml(e.message) + '</div>'; });
+}
+
+function renderList(d) {
+    const box = document.getElementById('coarseList');
+    if (!d.items.length) {
+        box.innerHTML = '<div class="empty-tip">该范围下没有待确认竞品（都已处理或已对齐）。</div>';
+        return;
+    }
+    let html = '<table class="candidate-table browse-table"><thead><tr>' +
+        '<th class="col-thumb">图</th><th class="col-comp-name">竞品商品名</th><th class="col-brand">品牌</th>' +
+        '<th class="col-cat">型号/类目</th><th class="col-price">价格</th><th class="col-sales">月售</th>' +
+        '<th class="col-own-name">候选品组</th><th class="col-action">操作</th></tr></thead><tbody>';
+    d.items.forEach(function(it) {
+        html += '<tr>';
+        html += '<td class="col-thumb">' + (it.图片 ?
+            '<img class="browse-thumb" src="' + escapeHtml(it.图片) + '" loading="lazy" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'<span class=no-thumb>无图</span>\';">' :
+            '<span class="no-thumb">无图</span>') + '</td>';
+        html += '<td class="col-comp-name"><a class="detail-link" href="/comp_detail?shop=' + encodeURIComponent(d.shop) + '&sku=' + encodeURIComponent(it.Sku_id) + '" title="点击查看详情">' + escapeHtml(it.商品名) + '</a></td>';
+        html += '<td class="col-brand">' + escapeHtml(it.品牌) + '</td>';
+        html += '<td class="col-cat">' + escapeHtml(it.型号) + '<br><span style="color:#94a3b8;font-size:11px;">' + escapeHtml(it.类目) + '</span></td>';
+        html += '<td class="col-price">' + escapeHtml(it.价格) + '</td>';
+        html += '<td class="col-sales">' + escapeHtml(it.月售) + '</td>';
+        html += '<td class="col-own-name">' + (it.候选品组 ?
+            '<span style="color:#1d4ed8;font-size:12px;" title="' + escapeHtml(it.候选品组ID) + '">' + escapeHtml(it.候选品组) + (it.候选置信度 ? '（' + escapeHtml(it.候选置信度) + '）' : '') + '</span>' :
+            '<span style="color:#cbd5e1;">—</span>') + '</td>';
+        html += '<td class="col-action">' +
+            '<a class="btn btn-sm" href="/comp_detail?shop=' + encodeURIComponent(d.shop) + '&sku=' + encodeURIComponent(it.Sku_id) + '&from=coarse">处理</a>' +
+            '</td>';
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+
+    // 分页
+    if (d.total_pages > 1) {
+        const base = '/coarse?shop=' + encodeURIComponent(d.shop) + '&q=' + encodeURIComponent(document.getElementById('qInput').value) +
+            '&brand=' + encodeURIComponent(document.getElementById('brandSel').value) + '&cat=' + encodeURIComponent(document.getElementById('catSel').value);
+        html += '<div class="pagination">';
+        if (d.page > 1) html += '<a class="btn" href="' + base + '&page=' + (d.page - 1) + '">← 上一页</a>';
+        html += '<span class="page-info">' + d.page + ' / ' + d.total_pages + '</span>';
+        if (d.page < d.total_pages) html += '<a class="btn" href="' + base + '&page=' + (d.page + 1) + '">下一页 →</a>';
+        html += '</div>';
+    }
+    box.innerHTML = html;
+}
+
+function renderAligned(aligned) {
+    const box = document.getElementById('alignedList');
+    if (!aligned.length) { box.innerHTML = '<div class="empty-tip">暂无已确认的品对（处理待确认竞品后，品对会出现在这里）。</div>'; return; }
+    let html = '<table class="candidate-table"><thead><tr>' +
+        '<th class="col-comp-name">竞品商品</th><th class="col-own-name">自家品组</th>' +
+        '<th class="col-conf">置信度</th><th class="col-status">确认来源</th></tr></thead><tbody>';
+    aligned.forEach(function(a) {
+        html += '<tr>';
+        html += '<td class="col-comp-name" title="' + escapeHtml(a.竞品品ID) + '">' + escapeHtml(a.竞品商品名) + '</td>';
+        html += '<td class="col-own-name" title="' + escapeHtml(a.自家品组ID) + '">' + escapeHtml(a.自家品名) + '</td>';
+        html += '<td class="col-conf">' + escapeHtml(a.置信度) + '</td>';
+        html += '<td class="col-status"><span class="badge">' + escapeHtml(a.确认来源) + '</span></td>';
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    box.innerHTML = html;
+}
+
+// ============ 批量大模型判断 ============
+let judgeBatchBusy = false;
+
+// 批量结果"确认对应"（采用大模型建议）
+function applySuggestion(shopEnc, skuEnc, ownSku, btn) {
+    const shop = decodeURIComponent(shopEnc), sku = decodeURIComponent(skuEnc);
+    if (!confirm('采用大模型建议，将该竞品对应到建议自家品？')) return;
+    btn.disabled = true;
+    fetch('/api/manual_confirm', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shop: shop, sku: sku, own_sku: ownSku, note: '采用大模型建议'})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        alert(d.ok ? d.msg : d.msg);
+        if (d.ok) window.location.reload();
+    })
+    .catch(function(e){ btn.disabled = false; alert('确认失败: ' + e.message); });
+}
+
+function startBatchJudge() {
+    if (judgeBatchBusy) return;
+    const status = document.getElementById('batchJudgeStatus');
+    const params = new URLSearchParams(location.search);
+    fetch('/api/coarse_queue?shop=' + encodeURIComponent(currentShop) +
+          '&q=' + encodeURIComponent(params.get('q') || '') +
+          '&brand=' + encodeURIComponent(params.get('brand') || '') +
+          '&cat=' + encodeURIComponent(params.get('cat') || '') + '&all_skus=1')
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+            if (!d.ok || !d.skus || !d.skus.length) { alert('当前筛选范围没有待判断的竞品'); return; }
+            const n = d.skus.length;
+            const cost = (n * 0.005).toFixed(2);
+            if (!confirm('将对当前筛选的 ' + n + ' 条竞品做批量大模型判断（含候选对照）。\n预计费用约 ' + cost + ' 元。\n判断结果仅作参考，确认仍由您把关。\n是否继续？')) return;
+            judgeBatchBusy = true;
+            document.getElementById('batchJudgeBtn').disabled = true;
+            runBatch(d.skus, 0, {yes: [], unsure: [], no: [], fail: []}, status);
+        })
+        .catch(function(e){ alert('获取列表失败: ' + e.message); });
+}
+
+function runBatch(skus, idx, groups, status) {
+    if (idx >= skus.length) {
+        judgeBatchBusy = false;
+        document.getElementById('batchJudgeBtn').disabled = false;
+        status.textContent = '';
+        renderJudgeGroups(groups, skus.length);
+        return;
+    }
+    const end = Math.min(idx + 3, skus.length);
+    let done = 0;
+    for (let i = idx; i < end; i++) {
+        (function(sku) {
+            fetch('/api/ai/match_judge', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({shop: currentShop, sku: sku})
+            })
+            .then(function(r){ return r.json(); })
+            .then(function(d) {
+                if (d.ok) {
+                    const v = d.result.verdict;
+                    (groups[v === '是' ? 'yes' : (v === '否' ? 'no' : 'unsure')]).push({sku: sku, result: d.result});
+                } else {
+                    groups.fail.push({sku: sku, msg: d.msg});
+                }
+            })
+            .catch(function(){ groups.fail.push({sku: sku, msg: '请求出错'}); })
+            .then(function() {
+                done++;
+                if (done === end - idx) {
+                    status.textContent = '判断进度：' + end + ' / ' + skus.length + '（是 ' + groups.yes.length + '，拿不准 ' + groups.unsure.length + '，否 ' + groups.no.length + '）';
+                    runBatch(skus, end, groups, status);
+                }
+            });
+        })(skus[i]);
+    }
+}
+
+function renderJudgeGroups(groups, total) {
+    const panel = document.getElementById('judgeResultPanel');
+    panel.style.display = 'block';
+    let html = '<div style="font-weight:700;margin-bottom:10px;">🤖 批量判断结果（' + total + ' 条）：是 ' + groups.yes.length + ' / 拿不准 ' + groups.unsure.length + ' / 否 ' + groups.no.length +
+        (groups.fail.length ? ' / 失败 ' + groups.fail.length : '') + '</div>';
+
+    if (groups.yes.length) {
+        html += '<div style="font-weight:600;color:#166534;margin:8px 0 4px;">模型判「是」（建议确认，您把关）</div>';
+        groups.yes.forEach(function(g) {
+            html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:4px;font-size:13px;">';
+            html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(g.result.suggest_own || g.sku) + '</span>';
+            html += '<span style="color:#94a3b8;font-size:12px;">' + escapeHtml(g.result.reason || '') + '</span>';
+            if (g.result.suggest_sku) {
+                html += '<button class="btn btn-sm" onclick="applySuggestion(\'' + encodeURIComponent(currentShop) + '\',\'' + encodeURIComponent(g.sku) + '\',\'' + g.result.suggest_sku + '\',this)">确认对应</button>';
+            } else {
+                html += '<a class="btn btn-sm" href="/comp_detail?shop=' + encodeURIComponent(currentShop) + '&sku=' + encodeURIComponent(g.sku) + '">手动处理</a>';
+            }
+            html += '</div>';
+        });
+    }
+    if (groups.unsure.length) {
+        html += '<div style="font-weight:600;color:#854d0e;margin:8px 0 4px;">模型拿不准（留待人工处理）</div>';
+        groups.unsure.slice(0, 10).forEach(function(g) {
+            html += '<div style="font-size:12px;color:#64748b;padding:2px 8px;">· ' + escapeHtml(g.result.suggest_own || g.sku) + '（' + escapeHtml(g.result.reason || '') + '）</div>';
+        });
+    }
+    if (groups.no.length) {
+        html += '<div style="font-weight:600;color:#991b1b;margin:8px 0 4px;">模型判「否」' + groups.no.length + ' 条（可忽略或复核）</div>';
+    }
+    if (groups.fail.length) {
+        html += '<div style="color:#dc2626;font-size:12px;margin-top:6px;">失败 ' + groups.fail.length + ' 条（网络/接口问题，可重试单条）</div>';
+    }
+    panel.innerHTML = html;
+}
+
+// ============ 学习管理 ============
+function loadLearn() {
+    fetch('/api/learn/status')
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+            if (!d.ok) return;
+            const s = d.status;
+            document.getElementById('learnStat').textContent =
+                '学习样本 ' + s.samples + ' 笔 | 待启用同义词 ' + s.pending_synonyms +
+                ' 个 | 待启用品牌补全 ' + s.pending_brand + ' 条';
+            let html = '';
+            if (s.synonyms && s.synonyms.length) {
+                html += '<div style="font-weight:600;margin:8px 0 4px;">待启用同义词（启用后重跑归一化生效）：</div>';
+                s.synonyms.forEach(function(p) {
+                    html += '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:4px;">';
+                    html += '<span style="flex:1;">' + escapeHtml(p.variant) + ' → <b>' + escapeHtml(p.standard) + '</b></span>';
+                    html += '<button class="btn btn-sm" onclick="learnSyn(\'' + escapeHtml(p.variant) + '\',\'' + escapeHtml(p.standard) + '\',true)">启用</button>';
+                    html += '<button class="btn btn-sm" onclick="learnSyn(\'' + escapeHtml(p.variant) + '\',\'' + escapeHtml(p.standard) + '\',false)">忽略</button>';
+                    html += '</div>';
+                });
+            }
+            if (s.brand_fills && s.brand_fills.length) {
+                html += '<div style="font-weight:600;margin:8px 0 4px;">待启用品牌补全（启用后重跑对齐生效）：</div>';
+                s.brand_fills.slice(0, 10).forEach(function(b) {
+                    html += '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:4px;">';
+                    html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(b.sku) + '">' + escapeHtml(b.sku) + ' → ' + escapeHtml(b.品牌) + (b.型号 ? '/' + escapeHtml(b.型号) : '') + '（' + escapeHtml(b.店) + '）</span>';
+                    html += '<button class="btn btn-sm" onclick="learnBrand(\'' + escapeHtml(b.sku) + '\',true)">启用</button>';
+                    html += '<button class="btn btn-sm" onclick="learnBrand(\'' + escapeHtml(b.sku) + '\',false)">忽略</button>';
+                    html += '</div>';
+                });
+                if (s.brand_fills.length > 10) html += '<div style="color:#94a3b8;">…共 ' + s.brand_fills.length + ' 条</div>';
+            }
+            document.getElementById('learnBody').innerHTML = html || '<div style="color:#94a3b8;">暂无待启用项。</div>';
+        })
+        .catch(function(){});
+}
+
+function learnExtract() {
+    if (!confirm('调用大模型从学习样本提炼同义词（预计几毛到几元）？\n提炼结果需人工启用后才生效。')) return;
+    fetch('/api/learn/extract', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})
+        .then(function(r){ return r.json(); })
+        .then(function(d) { alert(d.ok ? d.msg : d.msg); if (d.ok) loadLearn(); })
+        .catch(function(e){ alert('提炼失败: ' + e.message); });
+}
+
+function learnSyn(variant, standard, enable) {
+    fetch('/api/learn/synonym', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({variant: variant, standard: standard, enable: enable})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) { if (d.ok) loadLearn(); })
+    .catch(function(){});
+}
+
+function learnBrand(sku, enable) {
+    fetch('/api/learn/brand', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({sku: sku, enable: enable})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) { if (d.ok) loadLearn(); })
+    .catch(function(){});
+}
+
+window.onload = function() { loadShops(); loadLearn(); };
+</script>
+</body>
+</html>

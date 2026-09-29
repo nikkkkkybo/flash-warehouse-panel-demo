@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>对照详情 #{{ idx }}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+    <!-- 顶部导航 -->
+    {% set active = 'browse' %}
+    {% include "_nav.html" %}
+
+    <!-- 详情页导航 -->
+    <div class="detail-header">
+        <div class="nav-links">
+            <a href="/browse?shop={{ current_shop }}" class="btn btn-sm btn-secondary">← 返回列表</a>
+            {% if prev_idx is not none %}
+            <a href="/item/{{ prev_idx }}?shop={{ current_shop }}" class="btn btn-sm btn-secondary">← 上一条</a>
+            {% endif %}
+            {% if next_idx is not none %}
+            <a href="/item/{{ next_idx }}?shop={{ current_shop }}" class="btn btn-sm btn-secondary">下一条 →</a>
+            {% endif %}
+        </div>
+        <div class="idx-info">
+            候选 #{{ idx }} / {{ total }}
+            {% if item.竞店名称 %}<span class="status-tag" style="background:#eef2ff;color:#1e40af;">店铺：{{ item.竞店名称 }}</span>{% endif %}
+            {% if is_confirmed %}<span class="status-tag tag-confirmed">已确认</span>
+            {% elif is_no_match %}<span class="status-tag tag-nomatch">已标记无对应</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 左右对照 -->
+    <div class="compare-layout">
+        <!-- 左侧：竞品品 -->
+        <div class="left-panel">
+            <div class="panel-title">🔍 竞品品信息</div>
+            {% if item.竞品图片url %}
+            <img class="comp-image" src="{{ item.竞品图片url | img }}"
+                 onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22240%22 height=%22240%22><rect width=%22240%22 height=%22240%22 fill=%22%23f0f4f8%22/><text x=%22120%22 y=%22125%22 text-anchor=%22middle%22 fill=%22%23999%22 font-size=%2216%22>图片加载失败</text></svg>';">
+            {% else %}
+            <div class="comp-image" style="display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:14px;">暂无图片</div>
+            {% endif %}
+            <table class="info-table">
+                <tr><th>商品名</th><td>{{ item.竞品商品名 }}</td></tr>
+                <tr><th>品牌</th><td>{{ item.竞品品牌 }}</td></tr>
+                <tr><th>型号</th><td>{{ item.竞品型号 }}</td></tr>
+                <tr><th>类目</th><td>{{ item.竞品类目 }}</td></tr>
+                <tr><th>规格</th><td>{{ item.竞品规格键 }} {{ item.竞品规格 }}</td></tr>
+                <tr><th>条形码</th><td>{{ item.竞品条形码 }}</td></tr>
+                <tr><th>折后价</th><td>{{ item.竞品价格 }} 元</td></tr>
+                <tr><th>原价</th><td>{{ item.竞品原价 }} 元</td></tr>
+                <tr><th>月售</th><td>{{ item.竞品月售 }}</td></tr>
+                <tr><th>商品ID</th><td>{{ item.竞品品ID }}</td></tr>
+                <tr><th>Sku_id</th><td>{{ item.竞品Sku_id }} <button class="copy-btn" onclick="copySKU('{{ item.竞品Sku_id }}', this)">复制</button></td></tr>
+            </table>
+            <div class="match-info">
+                <span class="label">匹配层：</span><span class="value">{% if item.匹配层|string|int > 0 %}第{{ item.匹配层 }}层{% else %}{{ item.匹配层 }}{% endif %}</span>
+                &nbsp;|&nbsp;
+                <span class="label">匹配依据：</span><span class="value">{{ item.匹配依据 }}</span>
+                &nbsp;|&nbsp;
+                <span class="label">置信度：</span><span class="value">{{ item.置信度 }}</span>
+                {% if item.备注 %}<br><span class="label">备注：</span>{{ item.备注 }}{% endif %}
+            </div>
+        </div>
+
+        <!-- 右侧：自家商品库搜索 -->
+        <div class="right-panel">
+            <div class="panel-title">🏠 自家商品库</div>
+
+            <!-- 品级推荐（先选品，再选规格） -->
+            <div id="spuRecommend" class="spu-recommend" style="display:none;">
+                <div class="panel-title" style="color:#1e40af;">🎯 品级推荐：先选品，再选规格</div>
+                <div id="spuCardList"></div>
+            </div>
+
+            <!-- 系统候选提示 -->
+            <div id="candidateHint"></div>
+
+            <!-- 已选定信息 -->
+            <div id="selectedInfo" class="selected-info"></div>
+
+            <!-- 搜索框 -->
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="按 商品名称 / SKU / SPU / 条码 搜索..." onkeypress="if(event.key==='Enter')doSearch()">
+                <select id="categoryFilter">
+                    <option value="">全部类目</option>
+                    {% for cat in own_categories %}
+                    <option value="{{ cat }}">{{ cat }}</option>
+                    {% endfor %}
+                </select>
+                <select id="brandFilter">
+                    <option value="">全部品牌</option>
+                    {% for b in own_brands %}
+                    <option value="{{ b }}">{{ b }}</option>
+                    {% endfor %}
+                </select>
+                <button class="btn btn-sm" onclick="doSearch()">搜索</button>
+            </div>
+
+            <!-- 搜索结果 -->
+            <div id="searchResults" class="search-results">
+                <div class="result-empty">输入关键词后点击搜索</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部操作 -->
+    <div class="action-bar">
+        <input type="text" id="noteInput" class="note-input" placeholder="人工备注（可选）">
+        <button class="btn btn-success" onclick="confirmAlign()">✓ 确认对齐</button>
+        <button class="btn btn-danger" onclick="noMatch()">✗ 标记无对应</button>
+        {% if next_idx is not none %}
+        <a href="/item/{{ next_idx }}?shop={{ current_shop }}" class="btn btn-warning">⏭ 跳过</a>
+        {% else %}
+        <a href="/browse?shop={{ current_shop }}" class="btn btn-warning">⏭ 跳过</a>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// 从后端传递数据
+const IDX = {{ idx }};
+const NEXT_IDX = {{ next_idx | tojson }};
+const CURRENT_SHOP = {{ current_shop | tojson }};
+// 注意：CANDIDATE_OWN 的 SKUID 单独用字符串模板传递，绝不用 tojson
+// 因为 tojson 会把19位数字当 JS Number 字面量，超过 Number.MAX_SAFE_INTEGER(16位)导致精度丢失
+const CANDIDATE_OWN = {% if candidate_own and candidate_own.SKUID %}{
+    "SKUID": {{ candidate_own.SKUID | tojson }},
+    "商品名称": {{ (candidate_own.商品名称 or '') | tojson }},
+    "规格名称": {{ (candidate_own.规格名称 or '') | tojson }},
+    "品牌抽取": {{ (candidate_own.品牌抽取 or '') | tojson }},
+    "品牌名称": {{ (candidate_own.品牌名称 or '') | tojson }},
+    "售价": {{ (candidate_own.售价 or '') | tojson }},
+    "是否有图片": {{ (candidate_own.是否有图片 or '') | tojson }}
+}{% else %}null{% endif %};
+
+// SKU全局存储：key=行内序号sid, value=SKU字符串(全程字符串，绝不进JS数字字面量)
+// 解决19位SKU超过JS Number.MAX_SAFE_INTEGER(16位)导致的精度丢失
+const SKU_STORE = {};
+let _sku_seq = 0;
+function regSku(skuStr) {
+    const sid = _sku_seq++;
+    SKU_STORE[sid] = String(skuStr || '');
+    return sid;
+}
+
+// 品级候选：SKU 用 regSku 注册为 sid（19位数字绝不进 JS Number 字面量）
+const CANDIDATES = [
+    {% for c in item.候选品列表 %}
+    {
+        "品组ID": {{ c.品组ID | tojson }},
+        "品名": {{ c.品名 | tojson }},
+        "品牌": {{ c.品牌 | tojson }},
+        "型号": {{ c.型号 | tojson }},
+        "规格数": {{ c.规格数 | tojson }},
+        "置信度": {{ c.置信度 | tojson }},
+        "SKU列表": [
+            {% for s in c.SKU列表 %}
+            {"skuSid": regSku({{ s.SKUID | tojson }}), "name": {{ s.商品名称 | tojson }},
+             "spec": {{ s.规格名称 | tojson }}, "price": {{ s.售价 | tojson }},
+             "hasImg": {{ s.是否有图片 | tojson }}},
+            {% endfor %}
+        ]
+    },
+    {% endfor %}
+];
+
+let selectedSkuId = null;
+let selectedName = '';
+
+// HTML转义
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// 选定一个自家品（参数改为sid，通过SKU_STORE取真实SKU，避免19位数字进JS字面量）
+function selectItem(sid, name) {
+    const skuId = SKU_STORE[sid] || '';
+    selectedSkuId = skuId;
+    selectedName = name;
+    // 更新高亮
+    document.querySelectorAll('.result-item, .candidate-hint').forEach(function(el) {
+        el.classList.remove('selected');
+    });
+    const target = document.querySelector('[data-sku="' + sid + '"]');
+    if (target) target.classList.add('selected');
+    // 显示已选定 + 复制按钮（复制时从SKU_STORE取，全程字符串）
+    const copySid = regSku(skuId);
+    const info = document.getElementById('selectedInfo');
+    info.innerHTML = '✓ 已选定: ' + escapeHtml(name) + ' <span style="color:#64748b;font-weight:normal;">(SKU:' + escapeHtml(skuId) + ')</span> <button class="copy-btn" data-sku-sid="' + copySid + '" onclick="copySKUbySid(' + copySid + ', this)">复制SKU</button>';
+    info.classList.add('show');
+}
+
+// 复制SKU（按sid从SKU_STORE取，避免19位数字精度丢失）
+function copySKUbySid(sid, btn) {
+    const sku = SKU_STORE[sid] || '';
+    if (!sku) { alert('SKU为空'); return; }
+    const orig = btn ? btn.textContent : '';
+    const done = function() { if (btn) { btn.textContent = '✓已复制'; setTimeout(function(){ btn.textContent = orig; }, 1500); } };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(sku).then(done).catch(function(){ fallbackCopy(sku); done(); });
+    } else { fallbackCopy(sku); done(); }
+}
+function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(e){}
+    document.body.removeChild(ta);
+}
+
+// 搜索自家库
+function doSearch() {
+    const q = document.getElementById('searchInput').value.trim();
+    const category = document.getElementById('categoryFilter').value;
+    const brand = document.getElementById('brandFilter').value;
+    const resultsDiv = document.getElementById('searchResults');
+    resultsDiv.innerHTML = '<div class="result-empty">搜索中...</div>';
+
+    const params = new URLSearchParams({q: q, category: category, brand: brand});
+    fetch('/api/search?' + params.toString())
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.count === 0) {
+                resultsDiv.innerHTML = '<div class="result-empty">无匹配结果，试试其他关键词</div>';
+                return;
+            }
+            let html = '<div style="margin-bottom:8px;color:#64748b;font-size:12px;">找到 ' + data.count + ' 条结果（最多显示60条）</div>';
+            data.results.forEach(function(r) {
+                const sid = regSku(r.SKUID);
+                const isSel = (SKU_STORE[sid] === selectedSkuId) ? ' selected' : '';
+                html += '<div class="result-item' + isSel + '" data-sku="' + sid + '" onclick="selectItem(' + sid + ', \'' + escapeHtml(r.商品名称) + '\')">';
+                html += '<button class="select-btn" onclick="event.stopPropagation();selectItem(' + sid + ', \'' + escapeHtml(r.商品名称) + '\')">' + (isSel ? '已选定' : '选定此品') + '</button>';
+                html += '<div class="result-name">' + escapeHtml(r.商品名称) + '</div>';
+                html += '<div class="result-meta">';
+                html += '<span><b>SKU:</b> ' + escapeHtml(r.SKUID || '-') + ' <button class="copy-btn" onclick="event.stopPropagation();copySKUbySid(' + sid + ', this)">复制</button></span>';
+                html += '<span>规格: ' + escapeHtml(r.规格名称 || '-') + '</span>';
+                html += '<span>品牌: ' + escapeHtml(r.品牌抽取 || r.品牌名称 || '-') + '</span>';
+                html += '<span>类目: ' + escapeHtml(r.类目归一 || r.类目三级 || '-') + '</span>';
+                html += '<span>售价: ' + escapeHtml(r.售价 || '-') + '</span>';
+                html += '<span>型号: ' + escapeHtml(r.型号 || '-') + '</span>';
+                html += '<span>有图: ' + escapeHtml(r.是否有图片 || '-') + '</span>';
+                html += '</div></div>';
+            });
+            resultsDiv.innerHTML = html;
+        })
+        .catch(function(err) {
+            resultsDiv.innerHTML = '<div class="result-empty">搜索出错: ' + escapeHtml(err.message) + '</div>';
+        });
+}
+
+// 渲染品级推荐区：候选品卡片 -> 点品展开组内SKU -> 点SKU选中
+function renderSpuRecommend() {
+    const wrap = document.getElementById('spuRecommend');
+    const list = document.getElementById('spuCardList');
+    if (!CANDIDATES || !CANDIDATES.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    let html = '';
+    CANDIDATES.forEach(function(c, i) {
+        const openCls = (i === 0) ? ' open' : '';
+        let skuHtml = '<div class="spu-sku-list">';
+        c.SKU列表.forEach(function(s) {
+            const isSel = (SKU_STORE[s.skuSid] === selectedSkuId) ? ' selected' : '';
+            const nameSafe = escapeHtml(s.name || '(无名称)').replace(/'/g, "\\'");
+            skuHtml += '<div class="spu-sku-item' + isSel + '" data-sku="' + s.skuSid + '" ' +
+                'onclick="event.stopPropagation();selectItem(' + s.skuSid + ', \'' + nameSafe + '\')">';
+            skuHtml += '<span class="sku-name">' + escapeHtml(s.name || '(无名称)') +
+                (s.spec ? ' <span style="color:#94a3b8">' + escapeHtml(s.spec) + '</span>' : '') + '</span>';
+            skuHtml += '<span class="sku-price">' + (s.price ? '¥' + escapeHtml(s.price) : '') +
+                (s.hasImg ? ' 有图' : '') + '</span>';
+            skuHtml += '</div>';
+        });
+        skuHtml += '</div>';
+        html += '<div class="spu-card' + openCls + '" onclick="this.classList.toggle(\'open\')">';
+        html += '<div class="spu-head">';
+        html += '<span class="spu-name">' + escapeHtml(c.品名 || '(候选品)') + '</span>';
+        html += '<span class="spu-meta">' + escapeHtml(c.品牌 || '') + ' ' + escapeHtml(c.型号 || '') +
+            (c.规格数 ? ' · ' + c.规格数 + ' 个规格' : '') + '</span>';
+        html += '<span class="spu-conf">' + (c.置信度 ? '置信度 ' + escapeHtml(c.置信度) : '') + '</span>';
+        html += '<button class="spu-confirm-btn" onclick="event.stopPropagation();confirmSpu(' +
+            JSON.stringify(c.品组ID || '') + ', ' + JSON.stringify(c.品名 || '') + ')">仅确认此品</button>';
+        html += '</div>' + skuHtml + '</div>';
+    });
+    list.innerHTML = html;
+}
+
+// 仅确认品级（规格待补）——写汇总库 SPU匹配层
+function confirmSpu(spuGid, spuName) {
+    if (!spuGid) { alert('该候选缺少品组ID，无法仅确认品级'); return; }
+    const note = document.getElementById('noteInput').value.trim();
+    if (!confirm('仅确认品级（规格稍后再补）？\n将写入汇总库 SPU匹配层：' + spuName)) return;
+    fetch('/api/confirm_spu', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({idx: IDX, spu_gid: spuGid, spu_name: spuName, note: note})
+    })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                alert(data.msg);
+                window.location.reload();
+            } else {
+                alert('确认失败: ' + (data.msg || '未知错误'));
+            }
+        })
+        .catch(function(err) { alert('请求出错: ' + err.message); });
+}
+
+// 确认对齐
+function confirmAlign() {
+    if (!selectedSkuId) {
+        alert('请先在右侧选定一个自家品，再确认对齐');
+        return;
+    }
+    const note = document.getElementById('noteInput').value.trim();
+    if (!confirm('确认将此竞品品与选定的自家品对齐？\n自家品: ' + selectedName)) return;
+
+    fetch('/api/confirm', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({idx: IDX, sku_id: selectedSkuId, note: note})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            alert(data.msg);
+            if (NEXT_IDX !== null) {
+                window.location.href = '/item/' + NEXT_IDX + '?shop=' + encodeURIComponent(CURRENT_SHOP);
+            } else {
+                window.location.href = '/confirm?shop=' + encodeURIComponent(CURRENT_SHOP)
+            }
+        } else {
+            alert('操作失败: ' + data.msg);
+        }
+    })
+    .catch(function(err) { alert('请求出错: ' + err.message); });
+}
+
+// 标记无对应
+function noMatch() {
+    const note = document.getElementById('noteInput').value.trim();
+    if (!confirm('确认标记此竞品品在自家库中无对应？\n将进入引进评估队列。')) return;
+
+    fetch('/api/no_match', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({idx: IDX, note: note})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            alert(data.msg);
+            if (NEXT_IDX !== null) {
+                window.location.href = '/item/' + NEXT_IDX + '?shop=' + encodeURIComponent(CURRENT_SHOP);
+            } else {
+                window.location.href = '/confirm?shop=' + encodeURIComponent(CURRENT_SHOP)
+            }
+        } else {
+            alert('操作失败: ' + data.msg);
+        }
+    })
+    .catch(function(err) { alert('请求出错: ' + err.message); });
+}
+
+// 页面加载
+window.onload = function() {
+    // 渲染品级推荐（先选品再选规格）
+    renderSpuRecommend();
+
+    // 渲染系统候选提示
+    if (CANDIDATE_OWN && CANDIDATE_OWN.SKUID) {
+        const hint = document.getElementById('candidateHint');
+        hint.className = 'candidate-hint';
+        const candSid = regSku(CANDIDATE_OWN.SKUID);
+        hint.setAttribute('data-sku', candSid);
+        hint.setAttribute('onclick', "selectItem(" + candSid + ", '" + (CANDIDATE_OWN.商品名称 || '').replace(/'/g, "\\'") + "')");
+        let html = '<strong>系统候选自家品：</strong>' + escapeHtml(CANDIDATE_OWN.商品名称 || '(无名称)');
+        html += '<br><span style="color:#64748b;font-size:12px;">';
+        html += '<b>SKU:</b> ' + escapeHtml(CANDIDATE_OWN.SKUID) + ' <button class="copy-btn" onclick="event.stopPropagation();copySKUbySid(' + candSid + ', this)">复制</button> | ';
+        html += '规格: ' + escapeHtml(CANDIDATE_OWN.规格名称 || '-') + ' | ';
+        html += '品牌: ' + escapeHtml(CANDIDATE_OWN.品牌抽取 || CANDIDATE_OWN.品牌名称 || '-') + ' | ';
+        html += '售价: ' + escapeHtml(CANDIDATE_OWN.售价 || '-') + ' | ';
+        html += '有图: ' + escapeHtml(CANDIDATE_OWN.是否有图片 || '-');
+        html += '</span>';
+        html += '<button class="select-btn" onclick="event.stopPropagation();selectItem(' + candSid + ', \'' + (CANDIDATE_OWN.商品名称 || '').replace(/'/g, "\\'") + '\')">选定此品</button>';
+        hint.innerHTML = html;
+        // 默认选中
+        selectItem(candSid, CANDIDATE_OWN.商品名称 || '(系统候选)');
+    }
+
+    // 自动搜索：用竞品品牌
+    const autoQuery = {{ item.竞品品牌 | tojson }};
+    if (autoQuery) {
+        document.getElementById('searchInput').value = autoQuery;
+    }
+    doSearch();
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>对齐逻辑白板（空框架）- 闪电仓选品</title>
+    <style>
+        body{font-family:'Microsoft YaHei',sans-serif;background:#f8f5ee;margin:0;padding:20px;color:#1e293b;}
+        .bar{max-width:1100px;margin:0 auto 14px;display:flex;align-items:center;gap:12px;}
+        .bar h1{font-size:20px;margin:0;}
+        .bar .tip{font-size:12px;color:#94a3b8;}
+        .canvas{max-width:1100px;margin:0 auto;background:
+            linear-gradient(rgba(148,163,184,.12) 1px,transparent 1px),
+            linear-gradient(90deg,rgba(148,163,184,.12) 1px,transparent 1px);
+            background-size:28px 28px;
+            border:2px dashed #cbd5e1;border-radius:14px;padding:26px;min-height:640px;}
+        .row{display:flex;gap:18px;margin-bottom:18px;flex-wrap:wrap;}
+        .frame{border:2px dashed #94a3b8;border-radius:10px;background:rgba(255,255,255,.55);
+            padding:12px 14px;position:relative;cursor:pointer;transition:all .15s;flex:1;min-width:240px;}
+        .frame:hover{border-color:#2563eb;background:rgba(255,255,255,.9);box-shadow:0 4px 14px rgba(37,99,235,.12);}
+        .frame .tag{position:absolute;top:-10px;left:10px;background:#475569;color:#fff;font-size:11px;
+            padding:2px 10px;border-radius:8px;}
+        .frame .fname{font-weight:700;font-size:14px;color:#334155;margin:2px 0 8px;}
+        .frame .empty{color:#b0b8c4;font-size:12px;font-style:normal;line-height:1.8;text-align:center;padding:14px 0;}
+        .frame .zone{border:1px dashed #cbd5e1;border-radius:6px;padding:8px;margin-top:6px;color:#c0c8d4;font-size:12px;text-align:center;}
+        .frame .btn-ph{border:1px dashed #b7c0cc;border-radius:5px;display:inline-block;padding:3px 10px;font-size:12px;color:#a8b2bf;margin:4px;}
+        /* 弹窗 */
+        .modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:100;align-items:center;justify-content:center;}
+        .modal .box{background:#fff;border-radius:14px;width:min(620px,92vw);max-height:84vh;overflow:auto;padding:22px 26px;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+        .modal .mtitle{font-size:16px;font-weight:700;margin-bottom:4px;color:#0f172a;}
+        .modal .msub{font-size:12px;color:#94a3b8;margin-bottom:12px;}
+        .modal textarea{width:100%;height:230px;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-size:13px;line-height:1.9;box-sizing:border-box;resize:vertical;font-family:'Microsoft YaHei',sans-serif;}
+        .modal .btns{margin-top:12px;display:flex;gap:10px;justify-content:flex-end;}
+        .modal .btn{border:none;border-radius:8px;padding:8px 18px;font-size:13px;cursor:pointer;}
+        .modal .btn-ok{background:#2563eb;color:#fff;}
+        .modal .btn-save{background:#059669;color:#fff;}
+        .modal .btn-close{background:#e2e8f0;color:#334155;}
+        .modal .draft{font-size:12px;color:#64748b;background:#f8fafc;border-radius:8px;padding:10px 12px;margin-top:10px;line-height:1.8;}
+        .badge-saved{display:inline-block;background:#ecfdf5;color:#059669;font-size:11px;padding:2px 8px;border-radius:8px;margin-left:6px;}
+        .legend{max-width:1100px;margin:12px auto 0;font-size:12px;color:#94a3b8;line-height:1.8;}
+    </style>
+</head>
+<body>
+<div class="bar">
+    <h1>对齐逻辑白板（空框架）</h1>
+    <span class="tip">只画框架、不放内容。点击任意框架 → 推演"点这里会发生什么"，可改可存。</span>
+</div>
+
+<div class="canvas">
+    <!-- 第一行：总览 + 详情 -->
+    <div class="row">
+        <div class="frame" data-key="overview">
+            <span class="tag">入口</span>
+            <div class="fname">竞品总览页</div>
+            <div class="empty">竞品列表（空）<br>每行：图片 / 名称 / 价格 / 月售 / 收敛层级 / 状态</div>
+            <div class="btn-ph">点某条竞品 → ?</div>
+        </div>
+        <div class="frame" data-key="detail">
+            <span class="tag">处理中心</span>
+            <div class="fname">详情页</div>
+            <div style="display:flex;gap:8px;">
+                <div class="zone" style="flex:1;">左边：竞品信息（空）</div>
+                <div class="zone" style="flex:1;">右边：自家品对应区（空）</div>
+            </div>
+            <div style="margin-top:8px;">
+                <span class="btn-ph">候选品组?</span>
+                <span class="btn-ph">搜索自家品?</span>
+                <span class="btn-ph">AI判断?</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 第二行：搜索 / AI / 确认方式 -->
+    <div class="row">
+        <div class="frame" data-key="search">
+            <span class="tag">辅助</span>
+            <div class="fname">自家品搜索框</div>
+            <div class="empty">（空）</div>
+        </div>
+        <div class="frame" data-key="ai">
+            <span class="tag">辅助</span>
+            <div class="fname">AI 大模型判断</div>
+            <div class="empty">（空）</div>
+        </div>
+        <div class="frame" data-key="confirm">
+            <span class="tag">确认动作</span>
+            <div class="fname">确认按钮</div>
+            <div class="empty">（空）</div>
+        </div>
+    </div>
+
+    <!-- 第三行：人工确认页 + 学习管理 -->
+    <div class="row">
+        <div class="frame" data-key="confirmpage">
+            <span class="tag">结果查看</span>
+            <div class="fname">人工确认页（两层）</div>
+            <div style="display:flex;gap:8px;">
+                <div class="zone" style="flex:1;">SPU 层已粗对齐（空）</div>
+                <div class="zone" style="flex:1;">SKU 层已对应（空）</div>
+            </div>
+        </div>
+        <div class="frame" data-key="learn">
+            <span class="tag">反哺</span>
+            <div class="fname">学习管理区</div>
+            <div class="empty">（空）</div>
+        </div>
+        <div class="frame" data-key="catmap">
+            <span class="tag">前提</span>
+            <div class="fname">类目映射</div>
+            <div class="empty">（空）</div>
+        </div>
+    </div>
+</div>
+
+<div class="legend">
+    用法：点击虚线框 → 弹出该节点的交互推演草稿（"点这里 → 会发生什么"），您可以直接在文本框里改写成您认为的逻辑，点「保存我的逻辑」浏览器会记住（本机）。所有节点都过一遍后，把确认结果告诉我，我按确认的逻辑实施。
+</div>
+
+<!-- 弹窗 -->
+<div class="modal" id="modal">
+    <div class="box">
+        <div class="mtitle" id="mTitle"></div>
+        <div class="msub" id="mSub"></div>
+        <div class="draft" id="mDraft"></div>
+        <textarea id="mText" placeholder="在这里写/改这个节点的交互逻辑..."></textarea>
+        <div class="btns">
+            <button class="btn btn-close" onclick="closeModal()">关闭</button>
+            <button class="btn btn-save" onclick="saveLogic()">保存我的逻辑（本机）</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// 各节点的"推演草稿"（空框架，只给起始问题，不预设答案）
+const DRAFTS = {
+    overview: '点某条竞品 → 会发生什么？\n（比如：打开详情页？还是行内展开？）',
+    detail: '详情页打开后 → 左边显示什么？右边自家品区显示什么？\n（候选品组？搜索？AI判断？）',
+    search: '点搜索框输入关键字 → 结果从哪查？全库还是机器锁定的范围？结果怎么排？',
+    ai: '点「AI判断」按钮 → 发给大模型什么内容？返回什么？结果怎么用？',
+    confirm: '两种确认方式分别做什么？\n（选规格确认 = ?；仅确认品 = ?）',
+    confirmpage: '人工确认页显示什么？两层列表怎么来？能做什么操作？',
+    learn: '确认之后，系统学到什么？在哪里看？',
+    catmap: '类目映射在哪里确认？不确认会怎样？',
+};
+
+function openFrame(key) {
+    const saved = localStorage.getItem('logic_' + key);
+    document.getElementById('mTitle').textContent = document.querySelector('[data-key="' + key + '"] .fname').textContent;
+    document.getElementById('mSub').textContent = key;
+    document.getElementById('mDraft').textContent = '推演起点：' + (DRAFTS[key] || '点击后会发生什么？');
+    document.getElementById('mText').value = saved || '';
+    document.getElementById('modal').style.display = 'flex';
+    window._curKey = key;
+}
+function closeModal() { document.getElementById('modal').style.display = 'none'; }
+function saveLogic() {
+    const key = window._curKey;
+    localStorage.setItem('logic_' + key, document.getElementById('mText').value);
+    const f = document.querySelector('[data-key="' + key + '"]');
+    let b = f.querySelector('.badge-saved');
+    if (!b) { b = document.createElement('span'); b.className = 'badge-saved'; b.textContent = '已存我的逻辑'; f.querySelector('.fname').appendChild(b); }
+    else { b.textContent = '已存我的逻辑'; }
+    closeModal();
+    alert('已保存到本机浏览器。继续点其他框架推演。');
+}
+document.querySelectorAll('.frame').forEach(function(f) {
+    f.addEventListener('click', function() { openFrame(f.getAttribute('data-key')); });
+});
+document.getElementById('modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+</script>
+</body>
+</html>

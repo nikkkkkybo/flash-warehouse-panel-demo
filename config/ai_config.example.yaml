@@ -1,0 +1,23 @@
+# AI 配置模板：复制成 config/ai_config.yaml 再填 key（真 key 不入仓库）
+api_key: ""            # 你的 DeepSeek key（sk-...）；留空则 AI 功能自动退化为演示模式
+base_url: https://api.deepseek.com
+model: deepseek-chat
+
+# 驱动：real=真实接口 | fake=演示模式（不调接口不花钱，返回确定性模板）
+driver: fake
+# 真实调用最小间隔（秒，限速）
+min_interval_sec: 0.3
+
+# AI 预筛（人工池批量标注/分流，scripts/ai_prescreen.py）
+prescreen:
+  enabled: false        # 面板预筛计数展示开关（标注功能不受限）
+  mode: annotate        # annotate=只标注辅助人工 | triage=自动分流开关（准确率达标后改triage）
+  auto_confirm: 80      # triage：判同品且置信度≥80 自动写入汇总库（待抽检，确认来源=AI预筛）
+  auto_reject: 85       # triage：判非同品且置信度≥85 自动标无对应（门槛比confirm高5分）
+
+# 语义向量（可选，未配置时语义层自动退化为纯TF-IDF）
+# embeddings:
+#   provider: zhipu
+#   api_key: <你的key>
+#   base_url: https://open.bigmodel.cn/api/paas/v4
+#   model: embedding-3

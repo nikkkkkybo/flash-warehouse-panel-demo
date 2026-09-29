@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多店横比 - 闪电仓选品</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+    body { background: #f1f5f9; }
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 20px; }
+    .mx-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+    .mx-head h2 { font-size: 20px; margin: 0; }
+    .mx-head .sub { color: #94a3b8; font-size: 13px; }
+    .mx-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .src-meta { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+    .src-meta img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .src-meta .t { font-size: 16px; font-weight: 600; color: #1e293b; }
+    .src-meta .tags { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .src-meta .tag { background: #f1f5f9; color: #475569; font-size: 12px; padding: 2px 8px; border-radius: 6px; }
+    .src-meta .tag.spu { background: #eef2ff; color: #4f46e5; }
+    .own-box { margin-top: 10px; border-top: 1px dashed #e2e8f0; padding-top: 10px; font-size: 13px; }
+    .own-box b { color: #2563eb; }
+    .mode-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .mode-btn { padding: 6px 14px; border-radius: 8px; border: 1px solid #e2e8f0; background: #fff; color: #475569; font-size: 13px; text-decoration: none; }
+    .mode-btn.on { background: #2563eb; border-color: #2563eb; color: #fff; }
+    .agg-bar { display: flex; gap: 24px; flex-wrap: wrap; }
+    .agg-item .v { font-size: 22px; font-weight: 700; color: #1e293b; }
+    .agg-item .k { font-size: 12px; color: #94a3b8; }
+    .mx-table { width: 100%; border-collapse: collapse; background: #fff; font-size: 13px; }
+    .mx-table th { background: #f8fafc; color: #64748b; font-weight: 600; padding: 10px 8px; text-align: left; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+    .mx-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    .mx-table tr:hover td { background: #f8fafc; }
+    .mx-table .price { color: #dc2626; font-weight: 600; }
+    .mx-table .o-price { color: #94a3b8; text-decoration: line-through; font-size: 12px; }
+    .mx-table .sales { font-weight: 600; }
+    .mx-table img.thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0; }
+    .st-pill { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+    .st-sku { background: #dcfce7; color: #15803d; }
+    .st-spu { background: #fef9c3; color: #a16207; }
+    .st-cat { background: #dbeafe; color: #1d4ed8; }
+    .st-none { background: #f1f5f9; color: #64748b; }
+    .empty { padding: 48px; text-align: center; color: #94a3b8; font-size: 14px; }
+    .btn-sm { font-size: 12px; padding: 4px 10px; }
+</style>
+</head>
+<body>
+{% set active = 'browse' %}
+{% include "_nav.html" %}
+<div class="wrap">
+
+    <div class="mx-head">
+        <h2>🌐 多店横比</h2>
+        <a class="sub" href="/comp_detail?shop={{ shop }}&sku={{ sku }}">← 返回该竞品详情</a>
+    </div>
+
+    {% if src_row is not none %}
+    <div class="mx-card">
+        <div class="src-meta">
+            {% if src_row.get("image_url") or src_row.get("图片url") %}
+            <img src="{{ (src_row.get("image_url") or src_row.get("图片url")) | img }}"
+                 onerror="this.style.display='none';">
+            {% endif %}
+            <div style="flex:1;">
+                <div class="t">{{ src_name }}</div>
+                <div class="tags">
+                    {% if src_pid %}<span class="tag">竞品品ID: {{ src_pid }}</span>{% endif %}
+                    {% if src_cat %}<span class="tag">类目: {{ src_cat }}</span>{% endif %}
+                    {% if own_spu %}<span class="tag spu">自家品组: {{ own_spu }}</span>{% endif %}
+                    {% if own_sku %}<span class="tag spu">自家SKU: {{ own_sku }}</span>{% endif %}
+                </div>
+                <div class="own-box">
+                    当前来源：<b>{{ shop }}</b> 店 · 该品共找到 <b>{{ n }}</b> 条同款竞品（覆盖 {{ agg.shops }}/{{ shop_count }} 店）
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mx-card">
+        <div class="mode-bar" style="margin-bottom:12px;">
+            <span style="font-size:13px;color:#64748b;">匹配口径：</span>
+            <a class="mode-btn {% if mode == 'auto' %}on{% endif %}" href="/matrix?shop={{ shop }}&sku={{ sku }}&mode=auto">自动（优先自家对齐）</a>
+            <a class="mode-btn {% if mode == 'pid' %}on{% endif %}" href="/matrix?shop={{ shop }}&sku={{ sku }}&mode=pid">同竞品品ID</a>
+            <a class="mode-btn {% if mode == 'name' %}on{% endif %}" href="/matrix?shop={{ shop }}&sku={{ sku }}&mode=name">同商品名</a>
+        </div>
+        <div class="agg-bar">
+            <div class="agg-item"><div class="v">{{ agg.shops }}</div><div class="k">覆盖店数</div></div>
+            <div class="agg-item"><div class="v">{{ agg.min if agg.min != "" else "-" }}</div><div class="k">最低价</div></div>
+            <div class="agg-item"><div class="v">{{ agg.avg if agg.avg != "" else "-" }}</div><div class="k">均价</div></div>
+            <div class="agg-item"><div class="v">{{ agg.max if agg.max != "" else "-" }}</div><div class="k">最高价</div></div>
+            <div class="agg-item"><div class="v">{{ agg.sum_sales if agg.sum_sales != "" else "-" }}</div><div class="k">月售合计</div></div>
+        </div>
+    </div>
+
+    <div class="mx-card" style="padding:0;overflow-x:auto;">
+        {% if matches %}
+        <table class="mx-table">
+            <thead>
+                <tr>
+                    <th>店铺</th>
+                    <th>商品名</th>
+                    <th>品牌</th>
+                    <th>到手价</th>
+                    <th>原价</th>
+                    <th>月售</th>
+                    <th>条码</th>
+                    <th>图片</th>
+                    <th>收敛层级</th>
+                    <th>自家对应</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in matches %}
+                <tr>
+                    <td><b>{{ m["店铺"] }}</b></td>
+                    <td style="max-width:260px;">{{ m["商品名"] }}</td>
+                    <td>{{ m["品牌"] }}</td>
+                    <td class="price">{{ m["价格"] }}</td>
+                    <td class="o-price">{{ m["原价"] }}</td>
+                    <td class="sales">{{ m["月售"] }}</td>
+                    <td style="font-size:12px;">{{ m["条码"] }}</td>
+                    <td>
+                        {% if m["图片"] %}
+                        <img class="thumb" src="{{ m["图片"] | img }}" loading="lazy"
+                             onerror="this.style.display='none';">
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if m["状态"] == 'sku' %}<span class="st-pill st-sku">已对应</span>
+                        {% elif m["状态"] == 'spu' %}<span class="st-pill st-spu">品锁定</span>
+                        {% elif m["状态"] == 'cat' %}<span class="st-pill st-cat">类锁定</span>
+                        {% else %}<span class="st-pill st-none">未收敛</span>{% endif %}
+                    </td>
+                    <td style="max-width:180px;">
+                        {% if m["own_name"] %}
+                        <div style="font-size:12px;">{{ m["own_name"] }}</div>
+                        {% if m["own_price"] %}<div style="color:#dc2626;font-size:12px;">¥{{ m["own_price"] }}</div>{% endif %}
+                        {% else %}<span style="color:#cbd5e1;">—</span>{% endif %}
+                    </td>
+                    <td style="white-space:nowrap;">
+                        <a class="btn btn-sm" href="/comp_detail?shop={{ m["店铺"] }}&sku={{ m["Sku_id"] }}">详情</a>
+                        <a class="btn btn-sm" href="/matrix?shop={{ m["店铺"] }}&sku={{ m["Sku_id"] }}">横比</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">未找到同款竞品，可切换右上角匹配口径试试。</div>
+        {% endif %}
+    </div>
+
+    {% else %}
+    <div class="mx-card"><div class="empty">缺少竞品参数（shop + sku），无法横比。</div></div>
+    {% endif %}
+
+</div>
+</body>
+</html>

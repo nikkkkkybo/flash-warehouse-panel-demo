@@ -1,0 +1,22 @@
+# 竞品表导入配置示例（美团导出格式）
+# 来源：scripts/import_adapter.py --scan 自动猜映射 + 人工补全
+# 说明：竞品表无独立"售价/价格"列，"原价"列实为售价，人工指定为 price
+# 用法：python scripts/import_adapter.py --extract <竞品表.xlsx> --profile 示例_美团导出
+#       python scripts/normalize.py --profile 示例_美团导出
+source_name: 示例_美团导出
+mapping:
+  商品ID: comp_id
+  Sku_id: sku_id
+  一级类: category1
+  二级类: category2
+  美团后台三级类: category3
+  商品名字: name
+  月售: sales
+  原价: price
+  折后价: discount_price
+  神价: god_price
+  规格: spec
+  条形码: barcode
+  sku库存: stock
+  图片url: image_url
+created_at: '2026-08-06 00:00:00'

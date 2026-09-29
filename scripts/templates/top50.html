@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>销量前50人工匹配 - 选品面板</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .t50-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+        .t50-head h1 { font-size: 20px; margin: 0; }
+        .t50-prog { font-size: 13px; color: #64748b; }
+        .t50-prog b { color: #059669; }
+        .cmp-tabs { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+        .cmp-tab { padding: 6px 16px; border: 1px solid #cbd5e1; border-radius: 16px;
+                   font-size: 13px; color: #475569; background: #fff; text-decoration: none; }
+        .cmp-tab.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+        /* 列表 */
+        .t50-list { margin-top: 6px; }
+        .t50-row {
+            display: flex; align-items: center; gap: 12px;
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+            padding: 12px 16px; margin-bottom: 8px; cursor: pointer;
+            transition: border-color 0.15s;
+        }
+        .t50-row:hover { border-color: #93c5fd; }
+        .t50-row.open { border-color: #2563eb; }
+        .t50-rank { width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0;
+                    background: #2563eb; color: #fff; font-weight: 700;
+                    display: flex; align-items: center; justify-content: center; font-size: 14px; }
+        .t50-rank.top3 { background: #dc2626; }
+        .t50-thumb { width: 46px; height: 46px; border-radius: 8px; object-fit: cover;
+                     border: 1px solid #e2e8f0; background: #f8fafc; flex-shrink: 0; }
+        .t50-thumb-ph { width: 46px; height: 46px; border-radius: 8px; background: #f1f5f9;
+                        display: flex; align-items: center; justify-content: center;
+                        color: #cbd5e1; font-size: 11px; flex-shrink: 0; }
+        .t50-name { flex: 1; min-width: 0; }
+        .t50-name .pn { font-weight: 600; color: #1e293b; font-size: 14px; }
+        .t50-name .pm { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+        .t50-meta { display: flex; gap: 16px; flex-shrink: 0; font-size: 13px; color: #475569; }
+        .t50-meta b { color: #dc2626; }
+        .t50-arrow { color: #94a3b8; font-size: 16px; }
+        /* 状态徽章 */
+        .b-pend { background: #fef9c3; color: #854d0e; }
+        .b-ok { background: #dcfce7; color: #166534; }
+        .b-nm { background: #fee2e2; color: #991b1b; }
+        /* 展开详情 */
+        .t50-detail { display: none; background: #f8fafc; border: 1px solid #e2e8f0;
+                      border-radius: 10px; padding: 16px; margin: -4px 0 10px; }
+        .t50-detail.open { display: flex; gap: 18px; flex-wrap: wrap; }
+        .t50-specs { flex: 1; min-width: 300px; }
+        .t50-specs h4 { margin: 0 0 8px; font-size: 14px; color: #1e293b; }
+        .spec-row { display: flex; gap: 10px; padding: 7px 10px; background: #fff;
+                    border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 5px;
+                    font-size: 13px; }
+        .spec-row .sp { flex: 1; color: #475569; }
+        .spec-row .sp-price { color: #dc2626; font-weight: 600; width: 70px; text-align: right; }
+        .spec-row .sp-sales { color: #64748b; width: 60px; text-align: right; }
+        /* 匹配区 */
+        .t50-match { flex: 1; min-width: 320px; }
+        .t50-match h4 { margin: 0 0 8px; font-size: 14px; color: #1e293b; }
+        .search-row { display: flex; gap: 6px; margin-bottom: 8px; }
+        .search-row input { flex: 1; padding: 8px 12px; border: 1px solid #d1d5db;
+                            border-radius: 6px; font-size: 13px; }
+        .search-row input:focus { outline: none; border-color: #3b82f6; }
+        .sr-item { padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px;
+                   margin-bottom: 5px; cursor: pointer; background: #fff; font-size: 13px; }
+        .sr-item:hover { border-color: #93c5fd; }
+        .sr-item.selected { border-color: #10b981; background: #ecfdf5; }
+        .sr-item .sn { font-weight: 600; color: #1e293b; }
+        .sr-item .sm { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+        .sr-item .sr-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover;
+                             border: 1px solid #e2e8f0; float: left; margin-right: 10px; }
+        .sr-item .sr-ph { width: 40px; height: 40px; border-radius: 6px; background: #f1f5f9;
+                          float: left; margin-right: 10px; display: flex; align-items: center;
+                          justify-content: center; color: #cbd5e1; font-size: 10px; }
+        /* 自家品详情卡 */
+        .own-detail { display: none; background: #ecfdf5; border: 1px solid #bbf7d0;
+                      border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+        .own-detail.show { display: block; }
+        .own-detail .od-head { display: flex; gap: 12px; }
+        .own-detail .od-img { width: 84px; height: 84px; border-radius: 8px; object-fit: cover;
+                              border: 1px solid #bbf7d0; background: #fff; flex-shrink: 0; }
+        .own-detail .od-img-ph { width: 84px; height: 84px; border-radius: 8px; background: #fff;
+                                 display: flex; align-items: center; justify-content: center;
+                                 color: #cbd5e1; font-size: 12px; border: 1px solid #bbf7d0; flex-shrink: 0; }
+        .own-detail .od-name { font-size: 14px; font-weight: 600; color: #166534; margin-bottom: 4px; }
+        .own-detail .od-meta { font-size: 12px; color: #475569; line-height: 1.8; }
+        .own-detail .od-meta b { color: #166534; }
+        .own-detail .od-spus { margin-top: 6px; font-size: 12px; color: #64748b; }
+        .copy-btn { font-size: 11px; padding: 2px 10px; cursor: pointer; border: 1px solid #94a3b8;
+                    background: #fff; border-radius: 4px; color: #475569; margin-left: 6px; }
+        .copy-btn:hover { background: #e2e8f0; }
+        .match-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+        .matched-box { padding: 10px 14px; background: #ecfdf5; border: 1px solid #bbf7d0;
+                       border-radius: 8px; font-size: 13px; margin-bottom: 8px; }
+        .matched-box b { color: #166534; }
+        .t50-tip { font-size: 12px; color: #94a3b8; margin-top: 8px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    {% set active = 'compare' %}
+    {% include "_nav.html" %}
+
+    <header class="main-header">
+        <div class="t50-head">
+            <h1>🏆 竞品销量前 50 品（人工匹配）</h1>
+            <span class="t50-prog">已匹配 <b>{{ matched }}</b> / {{ products|length }}</span>
+            <button class="btn btn-sm" style="margin-left:auto;" onclick="genAdvice()">✨ 生成 AI 建议</button>
+            <span id="adviceStatus" style="font-size:12px;color:#64748b;"></span>
+        </div>
+        <div class="sub" style="margin-top:6px;">按竞品月售排序取前50个品（同规格归组）。点开 → 右侧搜索自家品 → 人工确认对应；无对应的点「确认无对应」——匹配完成后可一键生成 AI 建议（有对应→优化，无对应→上新）。</div>
+    </header>
+
+    {% if advice %}
+    <!-- AI 建议结果 -->
+    <div class="dash-section" style="background:#fff;border-radius:12px;padding:18px 22px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:16px;">
+        <div class="sec-head" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:10px;border-bottom:2px solid #f1f5f9;">
+            <span style="font-size:16px;font-weight:600;">🤖 AI 建议（{{ advice|length }} 条）</span>
+            <span style="font-size:12px;color:#94a3b8;">手动触发生成；完整版见 output/top50_Ai建议_{{ current_shop }}.xlsx</span>
+        </div>
+        <table class="candidate-table">
+            <thead><tr><th>排名</th><th>品名</th><th>状态</th><th>竞品月售</th><th>自家对应</th><th>AI 建议</th></tr></thead>
+            <tbody>
+                {% for a in advice %}
+                <tr>
+                    <td>{{ a.id }}</td>
+                    <td style="font-size:12px;">{{ a.品名 }}</td>
+                    <td>{% if a.状态 == '已匹配' %}<span class="badge b-ok">已匹配</span>
+                        {% elif a.状态 == '无对应' %}<span class="badge b-nm">无对应</span>
+                        {% else %}<span class="badge b-pend">待匹配</span>{% endif %}</td>
+                    <td>{{ a.竞品月售 }}{% if a.销量口径 == '意向' %}<small style="color:#7c3aed;"> (意向)</small>{% endif %}</td>
+                    <td style="font-size:12px;">{{ a.自家品名 or '-' }}</td>
+                    <td style="font-size:12px;color:#475569;">{{ a.建议 or '（未生成）' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <main>
+        <!-- Tab -->
+        <div class="cmp-tabs">
+            <a href="/compare?shop={{ current_shop }}&view=product&filter=all" class="cmp-tab">📦 产品分析（品）</a>
+            <a href="/compare?shop={{ current_shop }}&view=top50" class="cmp-tab active">🏆 销量前50（人工匹配）</a>
+            <a href="/compare?shop={{ current_shop }}&view=detail&filter=all" class="cmp-tab">⚖ 对比明细（SKU）</a>
+        </div>
+
+        <!-- 店铺切换 -->
+        <div class="shop-switcher">
+            {% for s in shops %}
+            <a href="/compare?view=top50&shop={{ s.name | urlencode }}" class="shop-chip {% if s.name == current_shop %}active{% endif %}">{{ s.name }}</a>
+            {% endfor %}
+        </div>
+
+        <div class="t50-list">
+            {% for p in products %}
+            <div class="t50-row" onclick="toggleDetail('d{{ loop.index }}', this)" data-idx="{{ loop.index }}">
+                <div class="t50-rank {% if loop.index <= 3 %}top3{% endif %}">{{ loop.index }}</div>
+                {% if p.图片 %}<img class="t50-thumb" src="{{ p.图片 | img }}" loading="lazy" onerror="this.outerHTML='<div class=t50-thumb-ph>无图</div>'">
+                {% else %}<div class="t50-thumb-ph">无图</div>{% endif %}
+                <div class="t50-name">
+                    <div class="pn">{{ p.品名 }}</div>
+                    <div class="pm">{{ p.类目 }} · {{ p.品牌 }}</div>
+                </div>
+                <div class="t50-meta">
+                    <span>月售 <b>{{ p.月售 }}</b></span>
+                    <span>¥{{ p.价格 }}</span>
+                    <span>{{ p.规格数 }}规格</span>
+                </div>
+                {% if p.状态 == '已匹配' %}<span class="badge b-ok">{{ p.状态 }}</span>
+                {% elif p.状态 == '无对应' %}<span class="badge b-nm">{{ p.状态 }}</span>
+                {% else %}<span class="badge b-pend">{{ p.状态 }}</span>{% endif %}
+                <span class="t50-arrow">▾</span>
+            </div>
+
+            <div class="t50-detail" id="d{{ loop.index }}">
+                <!-- 左：竞品规格 -->
+                <div class="t50-specs">
+                    <h4>🏪 竞品规格（{{ p.规格数 }} 个）</h4>
+                    {% if p.图片 %}
+                    <div style="margin-bottom:8px;">
+                        <img src="{{ p.图片 | img }}" style="max-width:120px;max-height:120px;border-radius:8px;border:1px solid #e2e8f0;"
+                             onerror="this.style.display='none';">
+                    </div>
+                    {% endif %}
+                    {% for s in p.SKU列表 %}
+                    <div class="spec-row">
+                        <span class="sp">{{ s.规格 or '（默认）' }}{% if s.条码 %} <span style="color:#94a3b8;">条码{{ s.条码 }}</span>{% endif %}</span>
+                        <span class="sp-sales">月售 {{ s.月售 }}</span>
+                        <span class="sp-price">¥{{ s.价格 }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                <!-- 右：人工匹配自家品 -->
+                <div class="t50-match">
+                    <h4>🏠 匹配自家品（人工搜索）</h4>
+                    {% if p.状态 == '已匹配' %}
+                    <div class="matched-box">✅ 已匹配：<b>{{ p.自家品名 }}</b>
+                        <button class="btn btn-sm btn-gray" style="margin-left:8px;"
+                                onclick="restoreMatch('{{ current_shop }}','{{ p.comp_id }}', event)">恢复待匹配</button>
+                    </div>
+                    {% endif %}
+                    <div class="search-row">
+                        <input type="text" id="q{{ loop.index }}" placeholder="搜索自家品名 / 品牌..." onkeydown="if(event.key==='Enter'){searchOwn({{ loop.index }}, event);}">
+                        <button class="btn btn-sm" onclick="searchOwn({{ loop.index }}, event)">搜索</button>
+                    </div>
+                    <div class="own-detail" id="od{{ loop.index }}"></div>
+                    <div id="sr{{ loop.index }}"></div>
+                    <div class="match-actions">
+                        <button class="btn btn-sm btn-green" onclick="confirmMatch('{{ current_shop }}','{{ p.comp_id }}', {{ loop.index }})">✅ 确认对应</button>
+                        {% if p.状态 != '无对应' %}
+                        <button class="btn btn-sm btn-gray" onclick="markNoMatch('{{ current_shop }}','{{ p.comp_id }}')">确认无对应</button>
+                        {% else %}
+                        <button class="btn btn-sm btn-gray" onclick="restoreMatch('{{ current_shop }}','{{ p.comp_id }}', event)">恢复</button>
+                        {% endif %}
+                    </div>
+                    <div class="t50-tip">选择方式：搜索 → 点选一条自家品（高亮）→ 确认对应。若自家确实没有对应品，点「确认无对应」。</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+</div>
+<script>
+function genAdvice() {
+    if (!confirm('将调用大模型（DeepSeek）对前50品生成逐条建议，约 0.02-0.05 元。\n确定生成？')) return;
+    var st = document.getElementById('adviceStatus');
+    st.textContent = '⏳ 正在生成（约1-2分钟）...';
+    fetch('/api/top50/advice', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({shop: '{{ current_shop }}'})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        st.textContent = '';
+        if (d.ok) {
+            alert(d.msg);
+            window.location.reload();
+        } else {
+            alert('生成失败: ' + d.msg);
+        }
+    })
+    .catch(function(e){ st.textContent = ''; alert('请求出错: ' + e.message); });
+}
+function toggleDetail(id, row) {
+    var d = document.getElementById(id);
+    var open = d.classList.toggle('open');
+    row.classList.toggle('open', open);
+    row.querySelector('.t50-arrow').textContent = open ? '▴' : '▾';
+}
+function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function searchOwn(idx, ev) {
+    if (ev) ev.stopPropagation();
+    var q = document.getElementById('q' + idx).value.trim();
+    var box = document.getElementById('sr' + idx);
+    if (!q) { box.innerHTML = ''; return; }
+    box.innerHTML = '搜索中...';
+    fetch('/api/own_spu_search?q=' + encodeURIComponent(q))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        if (!d.results || !d.results.length) { box.innerHTML = '<div class="sr-item">无匹配自家品</div>'; return; }
+        var sel = null;
+        box.innerHTML = d.results.map(function(r, i){
+            var img = r.图片
+                ? '<img class="sr-thumb" src="' + escapeHtml(r.图片) + '" onerror="this.outerHTML=\'<div class=sr-ph>无图</div>\'">'
+                : '<div class="sr-ph">无图</div>';
+            return '<div class="sr-item" id="sr_' + idx + '_' + i + '" onclick="pickOwn(' + idx + ',' + i + ')" '
+                 + 'data-spu="' + escapeHtml(r.品组ID) + '" data-name="' + escapeHtml(r.品名) + '">'
+                 + img
+                 + '<div class="sn">' + escapeHtml(r.品名) + '</div>'
+                 + '<div class="sm">' + escapeHtml(r.品牌 || '') + ' · ' + escapeHtml(r.类目 || '') + ' · 月销 ' + r.月销合计 + ' · ' + r.规格数 + '规格' + '</div></div>';
+        }).join('');
+        // 记忆选择
+        var old = box.getAttribute('data-sel');
+        if (old) {
+            var el = document.getElementById(old);
+            if (el) { el.classList.add('selected'); sel = el; }
+        }
+        box.setAttribute('data-sel', sel ? sel.id : '');
+    })
+    .catch(function(e){ box.innerHTML = '搜索出错: ' + e.message; });
+}
+function pickOwn(idx, i) {
+    var box = document.getElementById('sr' + idx);
+    var items = box.querySelectorAll('.sr-item');
+    items.forEach(function(it){ it.classList.remove('selected'); });
+    var el = document.getElementById('sr_' + idx + '_' + i);
+    el.classList.add('selected');
+    box.setAttribute('data-sel', el.id);
+    // 加载自家品详情卡（配图 + 复制SPU）
+    var spu = el.getAttribute('data-spu');
+    var det = document.getElementById('od' + idx);
+    if (det) {
+        det.innerHTML = '加载详情中...';
+        det.classList.add('show');
+    }
+    var qInput = document.getElementById('q' + idx);
+    var curQ = qInput ? qInput.value.trim() : '';
+    fetch('/api/own_spu_detail?spu=' + encodeURIComponent(spu) + '&q=' + encodeURIComponent(curQ))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        if (!det || !d.ok) { if (det) det.innerHTML = '加载失败'; return; }
+        var dd = d.detail;
+        var img = dd.图片
+            ? '<img class="od-img" src="' + escapeHtml(dd.图片) + '" onerror="this.outerHTML=\'<div class=od-img-ph>无图</div>\'">'
+            : '<div class="od-img-ph">无图</div>';
+        // 规格筛选词：品内区分度判定的规格词（如 M4），用它过滤 SKU 列表
+        var specWords = dd.规格筛选词 || [];
+        var skuList = dd.SKU列表 || [];
+        var filtered = skuList;
+        var filterHint = '';
+        if (specWords.length && skuList.length > 1) {
+            filtered = skuList.filter(function(s){
+                return specWords.some(function(w){ return String(s.规格 || '').indexOf(w) !== -1; });
+            });
+            filterHint = '<div style="font-size:11px;color:#059669;margin:4px 0;">已按规格词 [' + specWords.join('、') + '] 在品内筛选（' + filtered.length + '/' + skuList.length + ' 个规格）</div>';
+        }
+        var skuHtml = filtered.slice(0, 8).map(function(s){
+            return s.规格 + '（¥' + s.售价 + '，月销' + s.月销 + '）';
+        }).join('；');
+        det.innerHTML = '<div class="od-head">' + img
+            + '<div style="flex:1;min-width:0;">'
+            + '<div class="od-name">' + escapeHtml(dd.品名) + '</div>'
+            + '<div class="od-meta">品牌：' + escapeHtml(dd.品牌 || '（无）')
+            + ' · 类目：' + escapeHtml(dd.类目 || '')
+            + '<br>月销(30天) <b>' + dd.月销合计 + '</b>' + (dd["7天合计"] !== undefined ? ' · 7天 <b>' + dd["7天合计"] + '</b> ' + (dd.趋势 || '') : '') + ' · 售价 '
+            + (dd.售价区间[0] != null ? '¥' + dd.售价区间[0] + '-' + dd.售价区间[1] : '-')
+            + ' · ' + dd.规格数 + '规格</div>'
+            + filterHint
+            + '<div class="od-spus">规格：' + escapeHtml(skuHtml || '-') + '</div>'
+            + '</div></div>'
+            + '<div style="margin-top:8px;">品组ID：<b style="word-break:break-all;">' + escapeHtml(dd.品组ID) + '</b>'
+            + '<button class="copy-btn" onclick="copySpu(this)">📋 复制SPU</button>'
+            + '<span style="font-size:11px;color:#94a3b8;margin-left:6px;">复制后去牵牛花搜索核对</span></div>';
+    })
+    .catch(function(e){ if (det) det.innerHTML = '加载详情出错'; });
+}
+function copySpu(btn) {
+    var txt = btn.parentNode.querySelector('b').textContent;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(function(){ btn.textContent = '✓ 已复制'; setTimeout(function(){ btn.textContent = '📋 复制SPU'; }, 1500); });
+    } else {
+        var ta = document.createElement('textarea');
+        ta.value = txt; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        btn.textContent = '✓ 已复制'; setTimeout(function(){ btn.textContent = '📋 复制SPU'; }, 1500);
+    }
+}
+function getSelected(idx) {
+    var box = document.getElementById('sr' + idx);
+    var sel = box.getAttribute('data-sel');
+    if (!sel) return null;
+    var el = document.getElementById(sel);
+    if (!el) return null;
+    return { spu: el.getAttribute('data-spu'), name: el.getAttribute('data-name') };
+}
+function confirmMatch(shop, compId, idx) {
+    var sel = getSelected(idx);
+    if (!sel) { alert('请先在右侧搜索并点选一个自家品'); return; }
+    fetch('/api/top50_confirm', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({shop: shop, comp_id: compId, own_spu: sel.spu, own_name: sel.name})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ alert(d.msg); if (d.ok) location.reload(); })
+    .catch(function(e){ alert('请求出错: ' + e.message); });
+}
+function markNoMatch(shop, compId) {
+    if (!confirm('确认该竞品自家没有对应品？')) return;
+    fetch('/api/top50_nomatch', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({shop: shop, comp_id: compId})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ alert(d.msg); if (d.ok) location.reload(); })
+    .catch(function(e){ alert('请求出错: ' + e.message); });
+}
+function restoreMatch(shop, compId, ev) {
+    if (ev) ev.stopPropagation();
+    if (!confirm('恢复为待匹配？')) return;
+    fetch('/api/top50_nomatch', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({shop: shop, comp_id: compId, restore: true})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ alert(d.msg); if (d.ok) location.reload(); })
+    .catch(function(e){ alert('请求出错: ' + e.message); });
+}
+</script>
+</body>
+</html>

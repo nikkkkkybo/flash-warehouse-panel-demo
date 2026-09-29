@@ -1,0 +1,42 @@
+# 热度分计算配置 (v1)
+# 调参说明：修改 weight 即可调整各因子对最终热度分的影响。
+# v1 版本仅启用「月售归一化分」单一因子，后续版本可通过 enabled 开关扩展。
+
+hot_score:
+  version: v1
+
+  components:
+    # ---- 月售因子（v1 唯一启用项）----
+    monthly_sales:
+      enabled: true
+      weight: 1.0
+      sold:
+        # 已售类型：对数值做 min-max 归一化到 0-1
+        normalize: min_max        # 可选: min_max / rank
+        scope: global             # 全表统一归一化，保证跨类目可比
+      intent:
+        # 意向类型：先 min-max 归一化，再乘 0.3 权重（意向弱于已售）
+        normalize: min_max
+        weight: 0.3               # 意向 < 已售，上限 0.3
+
+  # TODO: 后续加入评论数/差评关键词/上新频率
+  # 预留扩展位（当前 enabled=false，不参与计算）：
+  future_components:
+    review_count:
+      enabled: false
+      weight: 0.20                # 评论数权重
+      normalize: min_max
+    negative_keyword:
+      enabled: false
+      weight: -0.10               # 差评关键词负向扣分
+    new_product_freq:
+      enabled: false
+      weight: 0.15                # 上新频率权重
+      normalize: min_max
+
+# 导出配置
+export:
+  per_category_top_n: 20          # 每个美团后台三级类目取 Top 20
+  overall_top_n: 100              # 全表取 Top 100
+  # 全表/类目内排名的并列处理：first（按热度分降序后顺序排名，保证唯一）
+  rank_method: first

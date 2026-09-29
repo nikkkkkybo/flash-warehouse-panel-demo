@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>首页·榜单 - 闪电仓选品</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .dash-hero { background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+                     border-radius: 14px; padding: 20px 26px; margin-bottom: 16px; color: #fff;
+                     box-shadow: 0 4px 16px rgba(37,99,235,0.25);
+                     display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        .dash-hero h1 { font-size: 22px; margin: 0 0 4px; }
+        .dash-hero .sub { color: rgba(255,255,255,0.85); font-size: 13px; }
+        .hero-actions { display: flex; gap: 10px; align-items: center; }
+        .hero-btn { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.4);
+                    border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 14px; }
+        .hero-btn:hover { background: rgba(255,255,255,0.28); }
+        /* 指标行 */
+        .dash-metrics { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+        .metric-card { flex: 1; min-width: 130px; background: #fff; border-radius: 12px; padding: 13px 14px;
+                       box-shadow: 0 2px 8px rgba(0,0,0,0.06); text-align: center; text-decoration: none;
+                       border-top: 3px solid #e2e8f0; transition: transform 0.15s; }
+        .metric-card:hover { transform: translateY(-2px); text-decoration: none; }
+        .metric-card .mv { font-size: 24px; font-weight: 700; color: #1e293b; line-height: 1.2; }
+        .metric-card .ml { font-size: 12px; color: #64748b; margin-top: 3px; }
+        .mc-total { border-top-color: #64748b; } .mc-pending { border-top-color: #f59e0b; }
+        .mc-pending .mv { color: #d97706; } .mc-coarse { border-top-color: #3b82f6; }
+        .mc-coarse .mv { color: #2563eb; } .mc-aligned { border-top-color: #10b981; }
+        .mc-aligned .mv { color: #059669; } .mc-nomatch { border-top-color: #ef4444; }
+        .mc-nomatch .mv { color: #dc2626; }
+        /* 变化摘要条（P0.3 看建议） */
+        .changes-bar { background: #fff; border-radius: 10px; padding: 10px 16px; margin-bottom: 12px;
+                       box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center;
+                       gap: 10px; flex-wrap: wrap; font-size: 13px; }
+        .ch-title { font-weight: 700; color: #1e293b; }
+        .ch-item { padding: 3px 10px; border-radius: 12px; font-size: 12.5px; white-space: nowrap; }
+        .ch-down { background: #fee2e2; color: #b91c1c; }
+        .ch-up { background: #dcfce7; color: #166534; }
+        .ch-new { background: #e0f2fe; color: #0369a1; }
+        .ch-off { background: #f1f5f9; color: #64748b; }
+        .ch-oos { background: #fef9c3; color: #854d0e; }
+        .ch-cut { background: #ffedd5; color: #c2410c; font-weight: 600; }
+        .ch-detail { margin-left: auto; }
+        .ch-detail summary { font-size: 12px; color: #94a3b8; cursor: pointer; }
+        .ch-detail table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+        .ch-detail th, .ch-detail td { border: 1px solid #e2e8f0; padding: 4px 8px; text-align: left; }
+        .ch-detail th { background: #f8fafc; color: #475569; }
+        /* 榜单区 */
+        .dash-section { background: #fff; border-radius: 12px; padding: 18px 22px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .sec-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+                    margin-bottom: 12px; padding-bottom: 10px; border-bottom: 2px solid #f1f5f9; }
+        .sec-title { font-size: 17px; font-weight: 600; color: #1e293b; }
+        .sec-note { font-size: 12px; color: #94a3b8; font-weight: 400; }
+        /* 筛选 Tab + 店铺切换 */
+        .rank-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+        .rank-tab { padding: 6px 16px; border: 1px solid #cbd5e1; border-radius: 16px; font-size: 13px;
+                    color: #475569; background: #fff; text-decoration: none; }
+        .rank-tab:hover { border-color: #93c5fd; color: #2563eb; }
+        .rank-tab.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+        .rank-tab .cnt { font-size: 11px; opacity: 0.85; margin-left: 3px; }
+        /* 榜单行 */
+        .rk-row { display: flex; align-items: center; gap: 12px; padding: 11px 8px;
+                  border-bottom: 1px solid #f1f5f9; cursor: pointer; }
+        .rk-row:hover { background: #fafbfc; }
+        .rk-row.open { background: #eff6ff; }
+        .rk-rank { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; background: #f1f5f9;
+                   color: #475569; font-weight: 700; display: flex; align-items: center;
+                   justify-content: center; font-size: 13px; }
+        .rk-row.top3 .rk-rank { background: #fee2e2; color: #dc2626; }
+        .rk-thumb { width: 46px; height: 46px; border-radius: 8px; object-fit: cover;
+                    border: 1px solid #e2e8f0; flex-shrink: 0; }
+        .rk-thumb-ph { width: 46px; height: 46px; border-radius: 8px; background: #f1f5f9; flex-shrink: 0;
+                       display: flex; align-items: center; justify-content: center; color: #cbd5e1; font-size: 11px; }
+        .rk-name { flex: 1; min-width: 0; }
+        .rk-name .pn { font-size: 14px; font-weight: 600; color: #1e293b; }
+        .rk-name .pn a { color: #1e293b; text-decoration: none; }
+        .rk-name .pn a:hover { color: #2563eb; }
+        .rk-name .pc { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+        /* 对比条 */
+        .rk-cmp { width: 190px; flex-shrink: 0; }
+        .cmp-line { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #64748b; }
+        .cmp-bar-wrap { flex: 1; background: #f1f5f9; border-radius: 4px; height: 7px; overflow: hidden; }
+        .cmp-bar.comp { height: 7px; background: linear-gradient(90deg,#60a5fa,#2563eb); border-radius: 4px; }
+        .cmp-bar.own { height: 7px; background: linear-gradient(90deg,#34d399,#059669); border-radius: 4px; }
+        .cmp-line b { color: #1d4ed8; font-size: 12px; }
+        .cmp-line.ownl b { color: #047857; }
+        /* 徽章 */
+        .badge { display: inline-block; border-radius: 6px; padding: 2px 9px; font-size: 12px; }
+        .b-opp { background: #fee2e2; color: #991b1b; }
+        .b-intro { background: #ffedd5; color: #c2410c; }
+        .b-ref { background: #ede9fe; color: #6d28d9; font-size: 11px; }
+        .b-onlist { background: #e0f2fe; color: #0369a1; }
+        .b-def { background: #fef9c3; color: #854d0e; }
+        .b-lead { background: #dcfce7; color: #166534; }
+        .b-ok { background: #dcfce7; color: #166534; }
+        .b-nm { background: #f1f5f9; color: #64748b; }
+        .b-intent { background: #f3e8ff; color: #7c3aed; font-size: 11px; margin-left: 4px; }
+        .b-pend { background: #eff6ff; color: #2563eb; }
+        .rk-badges { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; flex-shrink: 0; }
+        .rk-arrow { color: #94a3b8; font-size: 15px; flex-shrink: 0; transition: transform 0.15s; }
+        .rk-row.open .rk-arrow { transform: rotate(180deg); }
+        /* 展开卡 */
+        .rk-detail { display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+                     padding: 14px 16px; margin: -4px 0 10px; }
+        .rk-detail.open { display: flex; gap: 18px; flex-wrap: wrap; }
+        .rk-detail .od-col { flex: 1; min-width: 320px; }
+        .rk-detail h4 { margin: 0 0 8px; font-size: 13px; color: #1e293b; }
+        .spec-row { display: flex; gap: 10px; padding: 6px 8px; border-bottom: 1px solid #eef2f6;
+                    font-size: 12px; align-items: center; background: #fff; border-radius: 6px; margin-bottom: 4px; }
+        .spec-row .sp { flex: 1; color: #334155; }
+        .spec-row .sp-sales { color: #64748b; }
+        .spec-row .sp-price { color: #dc2626; font-weight: 600; }
+        /* 自家详情卡 */
+        .own-detail { background: #ecfdf5; border: 1px solid #bbf7d0; border-radius: 10px;
+                      padding: 12px 14px; margin-bottom: 10px; }
+        .own-detail .od-head { display: flex; gap: 12px; }
+        .own-detail .od-img { width: 76px; height: 76px; border-radius: 8px; object-fit: cover;
+                              border: 1px solid #bbf7d0; background: #fff; flex-shrink: 0; }
+        .own-detail .od-img-ph { width: 76px; height: 76px; border-radius: 8px; background: #fff;
+                                 display: flex; align-items: center; justify-content: center;
+                                 color: #cbd5e1; font-size: 12px; border: 1px solid #bbf7d0; flex-shrink: 0; }
+        .own-detail .od-name { font-size: 14px; font-weight: 600; color: #166534; margin-bottom: 4px; }
+        .own-detail .od-meta { font-size: 12px; color: #475569; line-height: 1.8; }
+        .own-detail .od-meta b { color: #166534; }
+        .copy-btn { font-size: 11px; padding: 2px 10px; cursor: pointer; border: 1px solid #94a3b8;
+                    background: #fff; border-radius: 4px; color: #475569; margin-left: 6px; }
+        .copy-btn:hover { background: #e2e8f0; }
+        .sku-chip { display: inline-flex; align-items: center; background: #fff; border: 1px solid #d1fae5;
+                    border-radius: 6px; padding: 3px 8px; font-size: 12px; color: #334155; margin: 2px; }
+        /* 搜索与动作 */
+        .search-row { display: flex; gap: 6px; margin-bottom: 8px; }
+        .search-row input { flex: 1; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; }
+        .search-row input:focus { outline: none; border-color: #3b82f6; }
+        .sr-item { padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 5px;
+                   cursor: pointer; background: #fff; font-size: 13px; display: flex; gap: 10px; align-items: flex-start; }
+        /* 搜索结果限高滚动：大量结果不全展开，左侧竞品对照信息始终可见 */
+        [id^="sr"] { max-height: 340px; overflow-y: auto; padding-right: 4px; }
+        [id^="sr"]::-webkit-scrollbar { width: 6px; }
+        [id^="sr"]::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .sr-item:hover { border-color: #93c5fd; }
+        .sr-item.selected { border-color: #10b981; background: #ecfdf5; }
+        .sr-item .sn { font-weight: 600; color: #1e293b; }
+        .sr-item .sm { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+        .sr-item .sr-thumb { width: 38px; height: 38px; border-radius: 6px; object-fit: cover;
+                             border: 1px solid #e2e8f0; float: left; margin-right: 10px; }
+        .sr-item .sr-ph { width: 38px; height: 38px; border-radius: 6px; background: #f1f5f9;
+                          float: left; margin-right: 10px; display: flex; align-items: center;
+                          justify-content: center; color: #cbd5e1; font-size: 10px; }
+        .match-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+        .matched-box { background: #dcfce7; border: 1px solid #86efac; border-radius: 8px;
+                       padding: 8px 12px; font-size: 13px; color: #166534; margin-bottom: 8px; }
+        .intro-box { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px;
+                     padding: 12px 14px; margin-bottom: 10px; font-size: 13px; color: #9a3412; }
+        .intro-box b { color: #c2410c; }
+        .empty-opp { padding: 26px; text-align: center; color: #94a3b8; font-size: 14px; }
+        .dash-note { font-size: 12px; color: #94a3b8; margin-top: 8px; }
+        /* AI 建议结果 */
+        .advice-tbl { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+        .advice-tbl th, .advice-tbl td { border: 1px solid #e2e8f0; padding: 6px 10px; text-align: left; }
+        .advice-tbl th { background: #f8fafc; }
+        /* ===== 分区模式（区热销榜整合） ===== */
+        .zone-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px;
+                      overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+        .zone-table th { background: #f8fafc; padding: 10px 12px; text-align: left; font-size: 13px;
+                         color: #475569; white-space: nowrap; }
+        .zone-table td { padding: 8px 12px; border-top: 1px solid #f1f5f9; font-size: 13px; vertical-align: middle; }
+        .zone-table tr:hover { background: #f8fafc; }
+        .zone-thumb { width: 44px; height: 44px; object-fit: contain; border-radius: 6px;
+                      border: 1px solid #e2e8f0; background: #f8fafc; }
+        .bind-badge { display: inline-block; background: #f5f3ff; color: #6d28d9; border-radius: 10px;
+                      padding: 1px 8px; font-size: 11px; font-weight: 600; }
+        .shop-chip { display: inline-flex; align-items: center; gap: 2px; background: #f8fafc; border: 1px solid #e2e8f0;
+                     border-radius: 8px; padding: 2px 8px; font-size: 11px; margin: 1px 2px; white-space: nowrap;
+                     text-decoration: none; color: inherit; }
+        .shop-chip:hover { background: #eff6ff; border-color: #93c5fd; }
+        .shop-chip b { color: #dc2626; }
+        .pct-pill { display: inline-block; border-radius: 8px; padding: 0 5px; font-size: 10px; font-weight: 700; }
+        .pct-top { background: #fef3c7; color: #b45309; }
+        .pct-mid { background: #f1f5f9; color: #64748b; }
+        .pct-low { background: #ecfdf5; color: #059669; }
+        .price-range { color: #dc2626; font-weight: 700; font-size: 13px; }
+        .price-range span { color: #94a3b8; font-weight: 400; font-size: 11px; }
+        .snap-tag { font-size: 10px; color: #94a3b8; }
+        .own-chip { display: inline-block; background: #ecfdf5; border: 1px solid #bbf7d0; color: #065f46;
+                    border-radius: 8px; padding: 2px 8px; font-size: 11px; }
+        /* 区展开面板（父子勾选：区=父，竞店/自家店=子） */
+        .zone-panel { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+                      padding: 10px 14px; margin: 8px 0; }
+        .zone-ck-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 4px 0; }
+        .zone-ck-label { font-size: 12px; color: #475569; font-weight: 600; white-space: nowrap; }
+        .shop-ck { display: inline-flex; align-items: center; gap: 5px; background: #fff; border: 1px solid #e2e8f0;
+                   border-radius: 8px; padding: 4px 10px; font-size: 12px; color: #334155; cursor: pointer; }
+        .shop-ck input { accent-color: #2563eb; }
+    </style>
+</head>
+<body>
+<div class="container">
+    {% set active = 'dashboard' %}
+    {% include "_nav.html" %}
+
+    <!-- 头部：标题 + 店铺 + AI建议 -->
+    <div class="dash-hero">
+        <div>
+            <h1>⚡ 品榜单</h1>
+            <div class="sub">进来第一眼看"该看什么"：机会/引进/防守一屏定夺 &nbsp;|&nbsp; {{ shop_count }} 家竞店</div>
+        </div>
+        <div class="hero-actions">
+            <button class="hero-btn" onclick="genAdvice()">✨ 生成 AI 建议</button>
+            <span id="adviceStatus" style="font-size:12px;color:rgba(255,255,255,0.85);"></span>
+        </div>
+    </div>
+
+    <!-- 全局指标（点击穿透） -->
+    <div class="dash-metrics">
+        <a class="metric-card mc-total" href="/browse"><div class="mv">{{ g.total }}</div><div class="ml">竞品总数</div></a>
+        <a class="metric-card mc-pending" href="/browse?status=pending"><div class="mv">{{ g.pending }}</div><div class="ml">待处理</div></a>
+        <a class="metric-card mc-coarse" href="/browse?status=coarse"><div class="mv">{{ g.coarse }}</div><div class="ml">已粗对齐（品）</div></a>
+        <a class="metric-card mc-aligned" href="/browse?status=aligned"><div class="mv">{{ g.aligned }}</div><div class="ml">已对应（品+规格）</div></a>
+        <a class="metric-card mc-nomatch" href="/browse?status=nomatch"><div class="mv">{{ g.nomatch }}</div><div class="ml">无对应</div></a>
+    </div>
+
+    <!-- 上次导入变化摘要（P0.3 看建议：降价/涨价/新品/下架/断货/被打价） -->
+    {% set ch = changes if changes is defined and changes else {"total": {}, "shops": {}} %}
+    {% if ch.total %}
+    <div class="changes-bar">
+        <span class="ch-title">📥 上次导入变化</span>
+        <span class="ch-item ch-down" title="竞品较上次观测降价（关注对手降价动作）">降价 {{ ch.total.get('降价', 0) }}</span>
+        <span class="ch-item ch-up" title="竞品涨价（自家相对更有优势）">涨价 {{ ch.total.get('涨价', 0) }}</span>
+        <span class="ch-item ch-new" title="首次出现或回归上架">新品 {{ ch.total.get('新品', 0) + ch.total.get('恢复上架', 0) }}</span>
+        <span class="ch-item ch-off" title="连续两次导入未出现">下架 {{ ch.total.get('下架', 0) }}</span>
+        <span class="ch-item ch-oos" title="库存归零 / 从 0 恢复">断货 {{ ch.total.get('断货', 0) }} · 回补 {{ ch.total.get('回补', 0) }}</span>
+        <span class="ch-item ch-cut" title="竞品到手价已低于自家售价（有对齐关系的品）——需核对防守价">⚡被打价 {{ ch.total.get('undercut警报', 0) }}</span>
+        <details class="ch-detail">
+            <summary>分店明细</summary>
+            <table>
+                <tr><th>店</th><th>降价</th><th>涨价</th><th>新品</th><th>下架</th><th>断货/回补</th><th>被打价</th><th>观测区间</th></tr>
+                {% for s, d in ch.shops.items() %}
+                <tr>
+                    <td>{{ s }}</td>
+                    <td>{{ d.counts.get('降价', 0) }}</td>
+                    <td>{{ d.counts.get('涨价', 0) }}</td>
+                    <td>{{ d.counts.get('新品', 0) + d.counts.get('恢复上架', 0) }}</td>
+                    <td>{{ d.counts.get('下架', 0) }}</td>
+                    <td>{{ d.counts.get('断货', 0) }}/{{ d.counts.get('回补', 0) }}</td>
+                    <td>{{ d.counts.get('undercut警报', 0) }}</td>
+                    <td title="{{ d.note }}">{{ (d.prev_t or '—')[:16] }} → {{ (d.cur_t or '—')[:16] }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </details>
+    </div>
+    {% elif ch.shops %}
+    <div class="dash-note" style="background:#fff;border-radius:10px;padding:8px 16px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+        📥 变化摘要：竞店数据尚为首次观测（基线）——下次导入同一店铺后，这里会显示 降价/涨价/新品/下架/断货/被打价 的变化清单。
+    </div>
+    {% endif %}
+
+    <!-- 榜单区 -->
+    <div class="dash-section">
+        <div class="sec-head">
+            <span class="sec-title">🏆 品榜单 <span class="sec-note">（竞品品级销量榜 · 点行展开对照，品名旁 ↗ 进详情）</span></span>
+            <span class="sec-note">已匹配 <b style="color:#059669;">{{ rank_stats.matched }}</b> / {{ rank_stats.total }} 品{% if obs is defined and obs and obs.last_t %} · 📅 竞品数据截至 <b>{{ obs.last_t[:16] }}</b>（第 {{ obs.snaps }} 次导入观测）{% endif %}</span>
+        </div>
+
+        <!-- 关键词搜索（多词 AND） -->
+        <form class="rank-search" method="get" action="/" style="display:flex;gap:8px;margin:8px 0;">
+            {% if zone %}<input type="hidden" name="zone" value="{{ zone.name }}">
+            {% if zone_inc %}{% for s in zone_inc %}<input type="hidden" name="inc" value="{{ s }}">{% endfor %}{% endif %}
+            {% else %}<input type="hidden" name="shop" value="{{ current_shop }}">
+            <input type="hidden" name="filter" value="{{ filter_f }}">
+            {% if own_store %}<input type="hidden" name="own_store" value="{{ own_store }}">{% endif %}
+            {% endif %}
+            <input type="text" name="q" value="{{ q }}" placeholder="搜索品名/品牌/类目/规格（空格分隔多词 AND）..." style="flex:1;padding:8px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;">
+            <button type="submit" class="hero-btn" style="background:#2563eb;color:#fff;border-color:#2563eb;">搜索</button>
+            {% if q %}{% if zone %}<a href="{{ zqs }}" class="hero-btn" style="background:#fff;color:#475569;">清空</a>{% else %}<a href="/?shop={{ current_shop | urlencode }}&filter={{ filter_f }}" class="hero-btn" style="background:#fff;color:#475569;">清空</a>{% endif %}{% endif %}
+        </form>
+
+        {% if zone %}
+        <!-- 区模式筛选 Tab（P0.3 收敛：热销/机会/区缺口/防守·领先/全部） -->
+        <div class="rank-tabs">
+            <a href="{{ zqs }}&filter=hot" class="rank-tab {% if filter_f == 'hot' %}active{% endif %}">🔥 热销</a>
+            <a href="{{ zqs }}&filter=opp" class="rank-tab {% if filter_f == 'opp' %}active{% endif %}">🎯 机会 <span class="cnt">{{ rank_stats.opp + rank_stats.intro + rank_stats.onlist }}</span></a>
+            <a href="{{ zqs }}&filter=gap" class="rank-tab {% if filter_f == 'gap' %}active{% endif %}" title="≥2 家竞店在售、自家没有的品（多店共卖=需求更实）；选自家门店后可区分 总库缺（引进）/门店缺（上架候选）">🕳 区缺口 <span class="cnt">{{ rank_stats.gap }}</span></a>
+            <a href="{{ zqs }}&filter=deflead" class="rank-tab {% if filter_f in ('deflead', 'def', 'lead') %}active{% endif %}" title="防守=双方都强需守住；领先=自家更强">🛡 防守·领先 <span class="cnt">{{ rank_stats.deflead }}</span></a>
+            {% if own_store %}
+            <a href="{{ zqs }}&filter=onlist" class="rank-tab {% if filter_f == 'onlist' %}active{% endif %}">🏷 漏上品 <span class="cnt">{{ rank_stats.onlist }}</span></a>
+            {% endif %}
+            <a href="{{ zqs }}&filter=all" class="rank-tab {% if filter_f == 'all' %}active{% endif %}">全部</a>
+            <span style="font-size:12px;color:#94a3b8;align-self:center;margin-left:4px;">🗺️ {{ '全部竞店' if zone.name == '__all__' else zone.name }}（{{ zone.comp_shops | length }} 店合并）· 已匹配 {{ rank_stats.matched }}/{{ rank_stats.total }}</span>
+        </div>
+        {% if zone_shops %}
+        <div style="font-size:11px;color:#94a3b8;margin:2px 0 6px;">
+            数据源：{% for sm in zone_shops %}{{ sm.shop }}（{{ sm.品数 }}品{% if sm.快照时间 %} · 快照 {{ sm.快照时间[5:16] }}{% endif %}）{% if not loop.last %} · {% endif %}{% endfor %}
+        </div>
+        {% endif %}
+        {% else %}
+        <!-- 筛选 Tab（P0.3 收敛：热销/机会/防守·领先/全部，漏上品选自家门店后出现） -->
+        <div class="rank-tabs">
+            <a href="/?shop={{ current_shop | urlencode }}&filter=hot{% if q %}&q={{ q | urlencode }}{% endif %}{% if own_store %}&own_store={{ own_store | urlencode }}{% endif %}" class="rank-tab {% if filter_f == 'hot' %}active{% endif %}">🔥 热销 Top50</a>
+            <a href="/?shop={{ current_shop | urlencode }}&filter=opp{% if q %}&q={{ q | urlencode }}{% endif %}{% if own_store %}&own_store={{ own_store | urlencode }}{% endif %}" class="rank-tab {% if filter_f == 'opp' %}active{% endif %}">🎯 机会 <span class="cnt">{{ rank_stats.opp + rank_stats.intro + rank_stats.onlist }}</span></a>
+            <a href="/?shop={{ current_shop | urlencode }}&filter=deflead{% if q %}&q={{ q | urlencode }}{% endif %}{% if own_store %}&own_store={{ own_store | urlencode }}{% endif %}" class="rank-tab {% if filter_f in ('deflead', 'def', 'lead') %}active{% endif %}" title="防守=双方都强需守住；领先=自家更强">🛡 防守·领先 <span class="cnt">{{ rank_stats.deflead }}</span></a>
+            {% if own_store %}
+            <a href="/?shop={{ current_shop | urlencode }}&filter=onlist{% if q %}&q={{ q | urlencode }}{% endif %}&own_store={{ own_store | urlencode }}" class="rank-tab {% if filter_f == 'onlist' %}active{% endif %}">🏷 漏上品 <span class="cnt">{{ rank_stats.onlist }}</span></a>
+            {% endif %}
+            <a href="/?shop={{ current_shop | urlencode }}&filter=all{% if q %}&q={{ q | urlencode }}{% endif %}{% if own_store %}&own_store={{ own_store | urlencode }}{% endif %}" class="rank-tab {% if filter_f == 'all' %}active{% endif %}">全部</a>
+        </div>
+        {% endif %}
+
+        <!-- 全站范围选择条（P0.1）：竞店侧=全部/区/单店 + 自家侧=总库/门店，全站统一 -->
+        {% include "_scope.html" %}
+
+        {% if zone %}
+        <!-- 勾选面板：区=子集微调；多选对比(__pick)=主操作入口（勾选竞店→按勾选重算） -->
+        <form method="get" action="/" class="zone-panel">
+            <input type="hidden" name="zone" value="{{ zone.name }}">
+            <input type="hidden" name="filter" value="{{ filter_f }}">
+            {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+            {% if own_store %}<input type="hidden" name="own_store" value="{{ own_store }}">{% endif %}
+            <div class="zone-ck-row">
+                <span class="zone-ck-label">{% if zone.pick %}🏪 勾选要对比的竞店（可多选，配上方自家店单选）{% else %}🏪 竞店（勾选即汇总）{% endif %}：</span>
+                {% for s in zone.comp_shops %}
+                <label class="shop-ck"><input type="checkbox" name="inc" value="{{ s }}" {% if s in zone_inc or (not zone.pick and not zone_inc) %}checked{% endif %}> {{ s }}</label>
+                {% endfor %}
+                <button type="submit" class="btn btn-sm btn-blue" style="margin-left:4px;">🔄 按勾选重算</button>
+            </div>
+        </form>
+        {% endif %}
+
+        {% if not prod_ready and filter_f in ('opp', 'def', 'lead', 'deflead') %}
+        <div class="dash-note" style="color:#d97706;margin-bottom:8px;">⏳ 产品分析结论计算中（约30秒，后台预热）——机会/防守/领先筛选稍后可用，"引进候选"不受影响。</div>
+        {% endif %}
+
+        {% set rows = zone_rows if zone else rank_rows %}
+        {% if rows %}
+            {% set maxs = rows | map(attribute='月售') | map('float') | max %}
+            {% for p in rows %}
+            {% set rank_no = loop.index + (page - 1) * page_size %}
+            {% set row_shop = p.主店 or current_shop %}
+            <div class="rk-row {% if rank_no <= 3 and filter_f == 'hot' %}top3{% endif %}" onclick="toggleRank('rd{{ loop.index }}', this, '{{ p.自家品组ID }}', '{{ p.品名 | e }}')">
+                <div class="rk-rank">{{ rank_no }}</div>
+                {% if p.图片 %}<img class="rk-thumb" src="{{ p.图片 | img }}" loading="lazy" onerror="this.outerHTML='<div class=rk-thumb-ph>无图</div>'">
+                {% else %}<div class="rk-thumb-ph">无图</div>{% endif %}
+                <div class="rk-name">
+                    <div class="pn">{{ p.品名 }} <a href="/comp_detail?shop={{ row_shop | urlencode }}&sku={{ p.SKU列表[0].sku_id | urlencode }}" onclick="event.stopPropagation();" title="深入了解（竞品详情）" style="font-size:12px;color:#94a3b8;">↗</a></div>
+                    <div class="pc">{{ p.类目 }}{% if p.品牌 %} · {{ p.品牌 }}{% endif %} · {{ p.规格数 }}规格</div>
+                    {% if zone and p.店铺明细 and p.店铺明细 | length > 1 %}
+                    <div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:3px;align-items:center;">
+                        {% if p.绑定组 %}<span class="bind-badge" title="候选池绑定组 {{ p.绑定组 }}：跨店同品已合并（销量合计）">🔗{{ p.店铺明细 | length }}店</span>{% endif %}
+                        {% for m in p.店铺明细 %}
+                        <a class="shop-chip" href="/comp_detail?shop={{ m.shop | urlencode }}&sku={{ m.sku_id | urlencode }}" onclick="event.stopPropagation();" title="{{ m.shop }} · 月售{{ m.月售 }} · ¥{{ m.价格 }} · 本店分位{{ m.分位 }}% — 点开看该店此品详情">
+                            {{ m.shop[:6] }}{% if m.分位 <= 10 %}<span class="pct-pill pct-top">T</span>{% endif %} {{ m.月售 | int }}售 <b>¥{{ m.价格 }}</b>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="rk-price">
+                        <span class="now">¥{{ p.价格 }}</span>
+                        {% if p.原价 and p.原价 != p.价格 %}<del class="price-orig">¥{{ p.原价 }}</del>{% endif %}
+                        {% if p.折扣 %}<span class="zk-badge">{{ p.折扣 }}</span>{% endif %}
+                        {% if p.较上次 is not none %}
+                        {% if p.较上次 > 0 %}<span class="diff-badge diff-up" title="较上次观测涨价 {{ p.较上次 }} 元（自家相对更有优势）">↑+{{ p.较上次 }}</span>
+                        {% else %}<span class="diff-badge diff-down" title="较上次观测降价 {{ -p.较上次 }} 元（注意竞品降价动作）">↓{{ p.较上次 }}</span>{% endif %}
+                        {% endif %}
+                        {% if p.观测期数 and p.观测期数 >= 2 %}<span class="obs-chip" title="该品共 {{ p.观测期数 }} 次导入观测——点行展开进详情可看历史轨迹">{{ p.观测期数 }}期</span>{% endif %}
+                        {% if p.分位 is not none %}
+                        {% if p.分位 >= 67 %}<span class="pct-badge pct-hi" title="该品价格高于同类 {{ p.分位 }}% 的竞品 SKU">同类偏贵</span>
+                        {% elif p.分位 <= 33 %}<span class="pct-badge pct-lo" title="仅 {{ p.分位 }}% 的同类竞品比它便宜">同类偏低</span>
+                        {% else %}<span class="pct-badge pct-mid" title="价格位于同类中段（分位 {{ p.分位 }}%）">同类中等</span>{% endif %}
+                        {% endif %}
+                        {% if p.自家价格带[0] != '' %}
+                        <span class="ownband" title="自家对应品售价区间">自¥{{ p.自家价格带[0] }}{% if p.自家价格带[1] != p.自家价格带[0] %}-{{ p.自家价格带[1] }}{% endif %}</span>
+                        {% if p.价差 is not none %}
+                        {% if p.价差 >= 0 %}<span class="diff-badge diff-up" title="竞品到手价比自家中位价高 {{ p.价差 }} 元（自家有价格优势）">↑贵{{ p.价差 }}</span>
+                        {% else %}<span class="diff-badge diff-down" title="竞品到手价比自家中位价低 {{ -p.价差 }} 元（自家偏贵，注意比价）">↓省{{ -p.价差 }}</span>{% endif %}
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="rk-cmp">
+                    <div class="cmp-line"><span>竞</span><div class="cmp-bar-wrap"><div class="cmp-bar comp" style="width: {{ (p.月售 / (maxs if maxs else 1) * 100) | round }}%"></div></div><b>{{ p.月售 }}</b>{% if p.意向 %}<span class="badge b-intent" title="意向数据（非真实成交）">(意向)</span>{% endif %}</div>
+                    <div class="cmp-line ownl"><span>自</span><div class="cmp-bar-wrap"><div class="cmp-bar own" style="width: {{ ((p.自家月销 | float) / (maxs if maxs else 1) * 100) | round }}%"></div></div><b>{{ p.自家月销 or 0 }}</b></div>
+                </div>
+                <div class="rk-badges">
+                    {% if p.结论 == '机会品' %}<span class="badge b-opp">机会</span>
+                    {% elif p.结论 == '引进候选' %}<span class="badge b-intro">引进候选</span>
+                    {% elif p.结论 == '上架候选' %}<span class="badge b-onlist">上架候选</span>
+                    {% elif p.结论 == '防守品' %}<span class="badge b-def">防守</span>
+                    {% elif p.结论 == '领先品' %}<span class="badge b-lead">领先</span>{% endif %}
+                    {% if p.对应参考 %}<span class="badge b-ref" title="机器品级候选给出的参考结论（未经人工确认，不参与防守定价）——点行去确认对应后转正">{{ p.对应参考 }}</span>{% endif %}
+                    {% if p.状态 == '已匹配' %}<span class="badge b-ok">已匹配</span>
+                    {% elif p.状态 == '无对应' %}<span class="badge b-nm">无对应</span>
+                    {% else %}<span class="badge b-pend">待匹配</span>{% endif %}
+                </div>
+                <span class="rk-arrow">▾</span>
+            </div>
+            <div class="rk-detail" id="rd{{ loop.index }}" data-comp="{{ p.comp_id }}" data-shop="{{ row_shop | e }}">
+                <!-- 左：竞品规格（区模式=主店规格；多店合并品下方列其他店） -->
+                <div class="od-col">
+                    <h4>🏪 竞品规格（{{ p.规格数 }} 个）{% if zone and p.店铺明细 and p.店铺明细 | length > 1 %}<span style="font-weight:400;font-size:12px;color:#2563eb;"> · 主店：{{ p.主店 }}</span>{% endif %}</h4>
+                    {% if p.图片 %}
+                    <div style="margin-bottom:8px;"><img src="{{ p.图片 | img }}" style="max-width:110px;max-height:110px;border-radius:8px;border:1px solid #e2e8f0;" onerror="this.style.display='none';"></div>
+                    {% endif %}
+                    {% for s in p.SKU列表[:12] %}
+                    <div class="spec-row">
+                        <span class="sp">{{ s.规格 or '（默认）' }}</span>
+                        <span class="sp-sales">月售 {{ s.月售 }}{% if s.意向 %} <small style="color:#7c3aed;">(意向)</small>{% endif %}</span>
+                        <span class="sp-price">¥{{ s.价格 }}{% if s.原价 and s.原价 != s.价格 %}<del class="price-orig">¥{{ s.原价 }}</del>{% endif %}</span>
+                    </div>
+                    {% endfor %}
+                    {% if p.SKU列表 | length > 12 %}<div class="dash-note">…共 {{ p.规格数 }} 个规格</div>{% endif %}
+                    {% if zone and p.店铺明细 and p.店铺明细 | length > 1 %}
+                    <div style="margin-top:8px;border-top:1px dashed #e2e8f0;padding-top:6px;">
+                        <div style="font-size:12px;color:#475569;font-weight:600;margin-bottom:3px;">📍 其他店此品（点店名看详情）</div>
+                        {% for m in p.店铺明细 if m.shop != p.主店 %}
+                        <a href="/comp_detail?shop={{ m.shop | urlencode }}&sku={{ m.sku_id | urlencode }}" style="display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#2563eb;text-decoration:none;padding:2px 0;" title="到「{{ m.shop }}」看此品完整详情">
+                            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ m.shop }}</span>
+                            <span style="color:#64748b;flex-shrink:0;">月售{{ m.月售 | int }} · ¥{{ m.价格 }}{% if m.分位 <= 10 %} · <b style="color:#dc2626;">T{{ m.分位 }}%</b>{% endif %}</span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                <!-- 右：自家对照（有对应=详情卡；无对应=引进候选+搜索确认） -->
+                <div class="od-col">
+                    {% if p.自家品组ID %}
+                    <h4>🏠 自家对应品（品组 {{ p.自家品组ID }}）<a href="javascript:void(0)" onclick="event.stopPropagation();undoMatch('{{ row_shop | e }}','{{ p.comp_id | e }}',this)" style="font-size:12px;color:#94a3b8;margin-left:8px;text-decoration:none;" title="对应错了？撤销对应（恢复待匹配）{% if zone %}（按主店口径）{% endif %}">↩ 撤销对应</a></h4>
+                    {% if p.结论 == '上架候选' %}
+                    <div class="intro-box" style="background:#f0f9ff;border-color:#bae6fd;color:#075985;">🏷 总库有对应品（{{ p.自家品名 or '见下方详情' }}），但<b>当前门店未上架</b> · 复制下方 SPU 去牵牛花上架</div>
+                    {% endif %}
+                    <div id="odc{{ loop.index }}"></div>
+                    {% else %}
+                    <h4>🏠 自家对应</h4>
+                    {% if p.结论 == '引进候选' %}
+                    <div class="intro-box">📦 自家无对应，<b>引进候选</b>{% if p.参考价带[0] != '' %} · 参考价带 <b>¥{{ p.参考价带[0] }}-{{ p.参考价带[1] }}</b>{% endif %}{% if p.规格数 > 1 %} · 规格 {{ p.规格数 }} 档{% endif %}
+                        {% if zone %}
+                        {% if p.全在池 %}
+                        <span style="color:#15803d;font-weight:600;">✅ 已在池</span>
+                        {% else %}
+                        <button class="btn btn-sm btn-green" data-items="{{ p.店铺明细 | tojson | forceescape }}" onclick="event.stopPropagation();zonePoolAdd(this)" title="该品全部店的条目入候选池（绑定组跨店全入）">➕ 加入候选池{% if p.店铺明细 | length > 1 %}（{{ p.店铺明细 | length }}店）{% endif %}</button>
+                        {% endif %}
+                        {% else %}
+                        {% if (current_shop, p.comp_id|string) in pool_keys %}
+                        <span style="color:#15803d;font-weight:600;">✅ 已在候选池</span>
+                        {% else %}
+                        <button class="btn btn-sm btn-green" onclick="event.stopPropagation();poolAdd(this,'{{ current_shop | e }}','{{ p.comp_id | e }}','{{ p.品名 | e }}')" title="加入候选池：可跨店绑定同品做全面分析">➕ 加入候选池</button>
+                        {% endif %}
+                        {% endif %}
+                        <a href="/pool" onclick="event.stopPropagation();" style="font-size:12px;color:#2563eb;margin-left:6px;">去候选池 →</a>
+                    </div>
+                    {% endif %}
+                    {% endif %}
+                    <div class="search-row">
+                        <input type="text" id="q{{ loop.index }}" placeholder="搜索自家品（如：膨胀管 38）..." onclick="event.stopPropagation();" onkeydown="if(event.key==='Enter'){event.stopPropagation();searchOwn({{ loop.index }}, event);}">
+                        <button class="btn btn-sm" onclick="event.stopPropagation();searchOwn({{ loop.index }}, event)">搜索</button>
+                    </div>
+                    <div id="sr{{ loop.index }}"></div>
+                    <div class="match-actions">
+                        <button class="btn btn-sm btn-green" onclick="event.stopPropagation();confirmRank({{ loop.index }})">✅ 确认对应</button>
+                        {% if p.状态 != '无对应' %}
+                        <button class="btn btn-sm btn-gray" onclick="event.stopPropagation();noMatchRank({{ loop.index }})">确认无对应</button>
+                        {% else %}
+                        <button class="btn btn-sm btn-gray" onclick="event.stopPropagation();noMatchRank({{ loop.index }}, true)">恢复待匹配</button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            {# 分页（区模式 zqs 保持勾选子集/自家店/搜索词；单店模式 shop 参数） #}
+            {% if total_pages > 1 %}
+            <div style="display:flex;justify-content:center;align-items:center;gap:14px;margin:14px 0 6px;">
+                {% if zone %}
+                {% if page > 1 %}<a href="{{ zqs }}&filter={{ filter_f }}&page={{ page - 1 }}" class="hero-btn" style="background:#fff;color:#475569;">← 上一页</a>{% endif %}
+                <span style="font-size:13px;color:#64748b;">第 <b>{{ page }}</b> / {{ total_pages }} 页 · 共 <b>{{ rank_stats.filtered }}</b> 品</span>
+                {% if page < total_pages %}<a href="{{ zqs }}&filter={{ filter_f }}&page={{ page + 1 }}" class="hero-btn" style="background:#fff;color:#475569;">下一页 →</a>{% endif %}
+                {% else %}
+                {% if page > 1 %}<a href="/?shop={{ current_shop | urlencode }}&filter={{ filter_f }}&q={{ q | urlencode }}{% if own_store %}&own_store={{ own_store | urlencode }}{% endif %}&page={{ page - 1 }}" class="hero-btn" style="background:#fff;color:#475569;">← 上一页</a>{% endif %}
+                <span style="font-size:13px;color:#64748b;">第 <b>{{ page }}</b> / {{ total_pages }} 页 · 共 <b>{{ rank_stats.filtered if rank_stats.filtered is defined else rank_rows|length }}</b> 品</span>
+                {% if page < total_pages %}<a href="/?shop={{ current_shop | urlencode }}&filter={{ filter_f }}&q={{ q | urlencode }}{% if own_store %}&own_store={{ own_store | urlencode }}{% endif %}&page={{ page + 1 }}" class="hero-btn" style="background:#fff;color:#475569;">下一页 →</a>{% endif %}
+                {% endif %}
+            </div>
+            {% endif %}
+            <div class="dash-note">
+                {% if zone %}
+                🔗 多店同品已自动合并（条码/品名归一；候选池绑定组可人工纠偏，月售合计）；确认对应/无对应按<b>主店</b>（月售最高的店）口径写入。
+                机会=竞品强自家弱；引进候选=自家无对应且合并月售≥30；🕳区缺口=≥2家竞店在售+自家没有
+                {% if own_store %}（<b style="color:#0369a1;">门店缺=总库有但「{{ own_store }}」未上架，动作成本最低</b>）{% endif %}；防守=双方都强；领先=自家更强。
+                紫色「参考」徽章=机器品级候选给的参考结论（未经人工确认），点行确认对应后转正。
+                {% if own_store and wh_status and not wh_status.usable %}
+                <b style="color:#b91c1c;">⚠ 自家销量口径：「{{ own_store }}」{% if wh_status.state == 'no_data' %}已指认「{{ wh_status.wh_name }}」，但当期补货参考快照里没有这个仓的数据{% else %}还没有指认对应的补货仓{% endif %} —— 本页“自家”数字一律是<b>多仓合计</b>，只能看总量级，<b>不能用于店对店比较</b>；请到 <a href="/tools#wh-map" style="color:#b91c1c;text-decoration:underline;">工具页 · 补货参考</a> 指认。（结论判定={{ sales_scope }}）</b>
+                {% elif own_store %}
+                <b style="color:#b91c1c;">⚠ 自家销量口径：对比条/展开卡=「{{ wh_label }}」仓（店对店，仓的销量归仓）{% if wh_status and wh_status.state == 'pending' %} <a href="/tools#wh-map" style="color:#92400e;text-decoration:underline;">［仓↔店为系统推定，点此确认］</a>{% endif %}；结论判定={{ sales_scope }}（总库合计口径）。</b>
+                {% endif %}
+                同品想人工改并，去 <a href="/pool" style="color:#2563eb;">候选池</a> 绑定；建区/改区在 <a href="/tools#zone-mgmt" style="color:#2563eb;">工具页</a>。
+                {% else %}
+                机会=竞品强自家弱；引进候选=自家无对应且竞品月售≥30；                {% if own_store %}<b style="color:#0369a1;">上架候选=总库有但「{{ own_store }}」未上架（动作成本最低）</b>；{% endif %}防守=双方都强；领先=自家更强。
+                紫色「参考」徽章=机器品级候选给的参考结论（未经人工确认），点行确认对应后转正。
+                {% if own_store and wh_status and not wh_status.usable %}
+                <b style="color:#b91c1c;">⚠ 自家销量口径：「{{ own_store }}」{% if wh_status.state == 'no_data' %}已指认「{{ wh_status.wh_name }}」，但当期补货参考快照里没有这个仓的数据{% else %}还没有指认对应的补货仓{% endif %} —— 本页“自家”数字一律是<b>多仓合计</b>，只能看总量级，<b>不能用于店对店比较</b>；请到 <a href="/tools#wh-map" style="color:#b91c1c;text-decoration:underline;">工具页 · 补货参考</a> 指认。（结论判定={{ sales_scope }}）</b>
+                {% elif own_store %}
+                <b style="color:#b91c1c;">⚠ 自家销量口径：对比条/展开卡=「{{ wh_label }}」仓（店对店，仓的销量归仓）{% if wh_status and wh_status.state == 'pending' %} <a href="/tools#wh-map" style="color:#92400e;text-decoration:underline;">［仓↔店为系统推定，点此确认］</a>{% endif %}；结论判定={{ sales_scope }}（总库合计口径）。</b>
+                {% endif %}
+                每页 {{ page_size }} 品（共 {{ total_pages }} 页）。点行展开 · 搜索确认就在卡里完成 · 对应错了可 ↩ 撤销。
+                {% endif %}
+            </div>
+        {% elif rank_loading %}
+            <div class="empty-opp">榜单计算中… 请稍后刷新</div>
+        {% else %}
+            {% if zone and zone.pick and not zone_inc %}
+            <div class="empty-opp">☝ 在上方勾选要对比的竞店（可多选），点「按勾选重算」——配合右侧自家店单选即为 店对店对比。</div>
+            {% elif zone %}
+            <div class="empty-opp">该区暂无榜单数据（区店铺未导入竞品数据{% if q %}，或搜索无结果{% endif %}）</div>
+            {% else %}
+            <div class="empty-opp">该店暂无榜单数据，请先到「工具 → 导入数据」上传竞店表</div>
+            {% endif %}
+        {% endif %}
+    </div>
+
+    <!-- AI 建议结果（生成后展示） -->
+    {% if advice %}
+    <div class="dash-section" style="margin-top:16px;">
+        <div class="sec-head"><span class="sec-title">💡 AI 建议（前50品，逐条 ≤20字）</span>
+            <span style="font-size:11.5px;color:#94a3b8;margin-left:8px;">标 <small style="color:#7c3aed;">(意向)</small> 的是"人想买"收藏量：按权重折进有效销量参与判定，不当成交笔数看</span></div>
+        <table class="advice-tbl">
+            <thead><tr><th>#</th><th>品名（点开看对照）</th><th>状态</th><th>竞品月售</th><th>自家品</th><th>建议</th></tr></thead>
+            <tbody>
+            {% for a in advice[:50] %}
+            <tr><td>{{ loop.index }}</td><td><a href="{{ a._url }}" style="color:#2563eb;text-decoration:none;" title="{{ a._url_tip or '跳到该品' }}">{{ a.品名 }}</a></td><td>{{ a.状态 }}</td><td>{{ a.竞品月售 }}{% if a.销量口径 == '意向' %}<small style="color:#7c3aed;"> (意向)</small>{% endif %}</td><td>{{ a.自家品名 or '-' }}</td><td>{{ a.建议 }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <div style="height:18px;"></div>
+</div>
+<script>
+function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+/* ===== 候选池：区模式一键入池（合并品跨店全量入） ===== */
+function zonePoolAdd(btn) {
+    var items = [];
+    try { items = JSON.parse(btn.getAttribute('data-items') || '[]'); } catch (e) {}
+    if (!items.length) return;
+    btn.disabled = true; btn.textContent = '入池中…';
+    var done = 0, n = items.length;
+    items.forEach(function(it) {
+        fetch('/api/pool/add', {method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({shop: it.shop, comp_id: it.comp_id, source: '区榜入池'})})
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+            done++;
+            if (done >= n) btn.outerHTML = '<span style="color:#15803d;font-weight:600;font-size:11px;">✅ 已入池' + (n > 1 ? '（' + n + '店）' : '') + '</span>';
+        })
+        .catch(function(e) {
+            done++;
+            if (done >= n) { btn.disabled = false; btn.textContent = '➕ 重试'; }
+        });
+    });
+}
+
+/* ===== 候选池：引进候选一键入池 ===== */
+function poolAdd(btn, shop, compId, name) {
+    btn.disabled = true;
+    btn.textContent = '入池中…';
+    fetch('/api/pool/add', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shop: shop, comp_id: compId, source: '首页引进候选'})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        if (d.ok) {
+            var extra = d.suggest_n ? ' · 🎯' + d.suggest_n + '个跨店候选' : '';
+            btn.outerHTML = '<span style="color:#15803d;font-weight:600;">✅ ' + (d.created ? '已入池' : '已在池') + extra + '</span>';
+        } else {
+            btn.disabled = false;
+            btn.textContent = '➕ 加入候选池';
+            alert('入池失败：' + (d.msg || '未知错误'));
+        }
+    })
+    .catch(function(e){
+        btn.disabled = false;
+        btn.textContent = '➕ 加入候选池';
+        alert('入池出错：' + e.message);
+    });
+}
+/* ===== 行内展开：懒加载自家品组详情 ===== */
+function toggleRank(id, row, spu, name) {
+    var d = document.getElementById(id);
+    var open = d.classList.toggle('open');
+    row.classList.toggle('open', open);
+    if (open && !d.getAttribute('data-loaded')) {
+        d.setAttribute('data-loaded', '1');
+        var box = d.querySelector('.od-col:nth-child(2) [id^="odc"]');
+        if (box && spu) renderOwnDetail(box.id, spu, name);
+    }
+}
+var _ownStoreNow = '';
+function renderOwnDetail(boxId, spu, q) {
+    var det = document.getElementById(boxId);
+    if (!det) return;
+    det.innerHTML = '加载详情中...';
+    var ownStore = new URLSearchParams(location.search).get('own_store') || '';
+    _ownStoreNow = ownStore;
+    fetch('/api/own_spu_detail?spu=' + encodeURIComponent(spu) + '&q=' + encodeURIComponent(q || '') +
+          '&scene=dash' + (ownStore ? '&own_store=' + encodeURIComponent(ownStore) : ''))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        if (!d.ok) { det.innerHTML = '<div class="dash-note">详情加载失败：' + escapeHtml(d.msg || '') + '</div>'; return; }
+        det.innerHTML = ownDetailHtml(d.detail);
+    })
+    .catch(function(e){ det.innerHTML = '加载出错: ' + e.message; });
+}
+function ownDetailHtml(dd) {
+    var img = dd.图片
+        ? '<img class="od-img" src="' + escapeHtml(dd.图片) + '" onerror="this.outerHTML=\'<div class=od-img-ph>无图</div>\'">'
+        : '<div class="od-img-ph">无图</div>';
+    var specWords = dd.规格筛选词 || [];
+    var skuList = dd.SKU列表 || [];
+    var filtered = skuList, filterHint = '';
+    if (specWords.length && skuList.length > 1) {
+        filtered = skuList.filter(function(s){
+            return specWords.some(function(w){ return String(s.规格 || '').indexOf(w) !== -1; });
+        });
+        filterHint = '<div style="font-size:11px;color:#059669;margin:4px 0;">已按规格词 [' + specWords.join('、') + '] 品内筛选（' + filtered.length + '/' + skuList.length + '）</div>';
+    }
+    var skuChips = filtered.slice(0, 10).map(function(s){
+        return '<span class="sku-chip">' + escapeHtml(s.规格 || '（默认）') + ' ¥' + escapeHtml(s.售价)
+            + '<button class="copy-btn" onclick="copyTxt(this,\'' + escapeHtml(s.SKUID) + '\')">📋SKU</button></span>';
+    }).join('');
+    return '<div class="od-head">' + img
+        + '<div style="flex:1;min-width:0;">'
+        + '<div class="od-name">' + escapeHtml(dd.品名) + '</div>'
+        + '<div class="od-meta">月销(30天·合计) <b>' + dd.月销合计 + '</b> · 7天(合计) <b>' + dd["7天合计"] + '</b> ' + (dd.趋势 || '')
+        + (dd.仓30 !== undefined && dd.仓30 !== null
+           ? ' · <b style="color:#b91c1c;">' + escapeHtml(dd.仓名) + '仓: 30天 ' + dd.仓30 + (dd.仓7 !== null ? ' / 7天 ' + dd.仓7 : '') + '</b>（本店口径）'
+           : (_ownStoreNow ? ' · <span style="color:#b91c1c;">本店对应仓无此品销量记录</span>' : ''))
+        + ' · 售价 '
+        + (dd.售价区间[0] != null ? '¥' + dd.售价区间[0] + '-' + dd.售价区间[1] : '-')
+        + ' · ' + dd.规格数 + '规格 · ' + escapeHtml(dd.品牌 || '（无品牌）') + '</div>'
+        + filterHint + '</div></div>'
+        + '<div style="margin-top:8px;">品组ID：<b>' + escapeHtml(dd.品组ID) + '</b>'
+        + '<button class="copy-btn" onclick="copyTxt(this,\'' + escapeHtml(dd.品组ID) + '\')">📋复制SPU</button>'
+        + '<span style="font-size:11px;color:#94a3b8;margin-left:6px;">复制后去牵牛花核对</span></div>'
+        + '<div style="margin-top:6px;">' + (skuChips || '<span class="dash-note">无规格</span>') + '</div>';
+}
+function copyTxt(btn, txt) {
+    var orig = btn.textContent;  // 记住原按钮名，复制完恢复（修复：SPU 按钮复制后误变 SKU）
+    var done = function(){ btn.textContent = '✓'; setTimeout(function(){ btn.textContent = orig; }, 1200); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(done);
+    } else {
+        var ta = document.createElement('textarea');
+        ta.value = txt; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta); done();
+    }
+}
+/* ===== 搜索自家品（两级搜索第1级） ===== */
+var pickedSpu = {};
+function searchOwn(idx, ev) {
+    if (ev) ev.stopPropagation();
+    var q = document.getElementById('q' + idx).value.trim();
+    var box = document.getElementById('sr' + idx);
+    if (!q) { box.innerHTML = ''; return; }
+    box.innerHTML = '搜索中...';
+    fetch('/api/own_spu_search?q=' + encodeURIComponent(q))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        if (!d.results || !d.results.length) { box.innerHTML = '<div class="sr-item">无匹配自家品</div>'; return; }
+        box.innerHTML = '<div style="font-size:11px;color:#94a3b8;margin-bottom:4px;">' + d.results.length + ' 个结果（区域内滚动，左侧竞品始终可见）</div>' + d.results.map(function(r){
+            var img = r.图片
+                ? '<img class="sr-thumb" src="' + escapeHtml(r.图片) + '" onerror="this.outerHTML=\'<div class=sr-ph>无图</div>\'">'
+                : '<div class="sr-ph">无图</div>';
+            return '<div class="sr-item" data-spu="' + escapeHtml(r.品组ID) + '" data-name="' + escapeHtml(r.品名) + '"'
+                 + ' onclick="pickOwn(' + idx + ', this, event)">'
+                 + img + '<div style="flex:1;min-width:0;">'
+                 + '<div class="sn">' + escapeHtml(r.品名) + '</div>'
+                 + '<div class="sm">' + escapeHtml(r.品牌 || '') + ' · 月销 ' + r.月销合计 + ' · ' + r.规格数 + '规格</div>'
+                 + '<div class="sm" style="color:#2563eb;">SPU ' + escapeHtml(r.品组ID)
+                 + ' <button class="copy-btn" onclick="event.stopPropagation();copyTxt(this,\'' + escapeHtml(r.品组ID) + '\')">📋SPU</button></div>'
+                 + '</div></div>';
+        }).join('');
+    })
+    .catch(function(e){ box.innerHTML = '搜索出错: ' + e.message; });
+}
+function pickOwn(idx, el, ev) {
+    if (ev) ev.stopPropagation();
+    var box = document.getElementById('sr' + idx);
+    box.querySelectorAll('.sr-item').forEach(function(it){ it.classList.remove('selected'); });
+    el.classList.add('selected');
+    pickedSpu[idx] = { spu: el.getAttribute('data-spu'), name: el.getAttribute('data-name') };
+    var host = document.getElementById('odc' + idx) || el.parentNode.parentNode.querySelector('[id^="odc"]');
+    if (host) renderOwnDetail(host.id, pickedSpu[idx].spu, document.getElementById('q' + idx).value.trim());
+}
+/* ===== 确认 / 无对应 / 恢复（区模式按主店口径：data-shop） ===== */
+function confirmRank(idx) {
+    var d = document.getElementById('rd' + idx);
+    var compId = d.getAttribute('data-comp');
+    var shop = d.getAttribute('data-shop') || '{{ current_shop | e }}';
+    var sel = d.querySelector('.sr-item.selected');
+    var picked = pickedSpu[idx] || (sel ? { spu: sel.getAttribute('data-spu'), name: sel.getAttribute('data-name') } : null);
+    var existing = d.querySelector('[id^="odc"]') ? d.querySelector('[id^="odc"]').getAttribute('data-spu') : null;
+    var spu = picked ? picked.spu : existing;
+    var name = picked ? picked.name : '';
+    if (!spu) { alert('请先搜索并点选一个自家品'); return; }
+    if (!confirm('确认对应：该竞品品 ↔ 自家品「' + (name || spu) + '」？' + (shop ? '\n（写入店铺：' + shop + '）' : ''))) return;
+    fetch('/api/top50_confirm', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ shop: shop, comp_id: compId, own_spu: spu, own_name: name })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d2){ alert(d2.msg); if (d2.ok) window.location.reload(); })
+    .catch(function(e){ alert('请求出错: ' + e.message); });
+}
+function noMatchRank(idx, restore) {
+    var d = document.getElementById('rd' + idx);
+    var compId = d.getAttribute('data-comp');
+    var shop = d.getAttribute('data-shop') || '{{ current_shop | e }}';
+    if (!confirm(restore ? '恢复为待匹配？' : '确认自家无对应？（引进候选可据此定价上新）')) return;
+    fetch('/api/top50_nomatch', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ shop: shop, comp_id: compId, restore: restore === true })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d2){ alert(d2.msg); if (d2.ok) window.location.reload(); })
+    .catch(function(e){ alert('请求出错: ' + e.message); });
+}
+/* ===== 撤销对应（应对应错）==== */
+function undoMatch(shop, compId, btn) {
+    if (!confirm('撤销「' + shop + '」该品的对应？\\n该品会恢复为待匹配，汇总库对应行同步删除。')) return;
+    btn.textContent = '⏳ 撤销中…';
+    fetch('/api/confirm_undo', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ shop: shop, comp_id: compId })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d2){ alert(d2.msg || (d2.ok ? '已撤销' : '撤销失败')); if (d2.ok) window.location.reload(); else btn.textContent = '↩ 撤销对应'; })
+    .catch(function(e){ alert('请求出错: ' + e.message); btn.textContent = '↩ 撤销对应'; });
+}
+/* ===== AI 建议 ===== */
+function genAdvice() {
+    if (!confirm('将调用大模型对「{{ current_shop | e }}」前50品生成逐条建议（约1-2分钟）。\n确定生成？')) return;
+    var st = document.getElementById('adviceStatus');
+    st.textContent = '⏳ 生成中（约1-2分钟）...';
+    fetch('/api/top50/advice', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ shop: '{{ current_shop | e }}' })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        st.textContent = '';
+        if (d.ok) window.location.reload();
+        else alert('生成失败: ' + d.msg);
+    })
+    .catch(function(e){ st.textContent = ''; alert('请求出错: ' + e.message); });
+}
+</script>
+{% include "_assistant.html" %}
+</body>
+</html>

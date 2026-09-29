@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>竞争分析面板（框架线框）- 闪电仓选品</title>
+    <style>
+        body{font-family:'Microsoft YaHei',sans-serif;background:#f1f5f9;margin:0;padding:20px;color:#1e293b;}
+        .frame-flag{position:fixed;top:0;left:0;right:0;background:#fef3c7;color:#92400e;text-align:center;
+            font-size:12px;padding:4px;z-index:99;border-bottom:1px dashed #f59e0b;}
+        .wrap{max-width:1180px;margin:26px auto 0;}
+        h1{font-size:20px;margin:0 0 2px;}
+        .sub{font-size:12px;color:#94a3b8;margin-bottom:16px;}
+        .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin-bottom:16px;position:relative;}
+        .card .card-tag{position:absolute;top:-9px;left:12px;background:#2563eb;color:#fff;font-size:11px;padding:2px 10px;border-radius:8px;}
+        .card .card-tag.gray{background:#64748b;}
+        .stats{display:flex;gap:12px;flex-wrap:wrap;}
+        .stat{flex:1;min-width:130px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;text-align:center;cursor:pointer;}
+        .stat:hover{border-color:#2563eb;}
+        .stat .n{font-size:22px;font-weight:700;color:#1e3a8a;}
+        .stat .t{font-size:12px;color:#64748b;margin-top:2px;}
+        .shop-chips{display:flex;gap:8px;flex-wrap:wrap;}
+        .chip{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:5px 14px;font-size:12px;color:#475569;}
+        .chip.active{background:#2563eb;color:#fff;border-color:#2563eb;}
+        .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+        .fbox{border:1px solid #e2e8f0;border-radius:8px;padding:6px 12px;font-size:12px;color:#94a3b8;background:#f8fafc;min-width:90px;text-align:center;}
+        .fbox.input{flex:1;min-width:200px;text-align:left;color:#b0b8c4;}
+        .fbox.check{display:flex;align-items:center;gap:6px;min-width:auto;}
+        table{width:100%;border-collapse:collapse;font-size:13px;}
+        th{background:#f8fafc;color:#64748b;font-size:12px;text-align:left;padding:8px 10px;border-bottom:2px solid #e2e8f0;}
+        td{padding:9px 10px;border-bottom:1px solid #f1f5f9;vertical-align:middle;}
+        tr.demo td{color:#94a3b8;}
+        tr.demo:hover{background:#f8fafc;}
+        .thumb{width:34px;height:34px;border:1px dashed #cbd5e1;border-radius:6px;background:#f8fafc;display:flex;align-items:center;justify-content:center;font-size:10px;color:#b0b8c4;}
+        .badge{display:inline-block;font-size:11px;padding:2px 10px;border-radius:10px;}
+        .b-none{background:#fee2e2;color:#991b1b;}
+        .b-cat{background:#fef9c3;color:#854d0e;}
+        .b-spu{background:#dbeafe;color:#1e40af;}
+        .b-sku{background:#dcfce7;color:#166534;}
+        .b-nomatch{background:#f1f5f9;color:#64748b;}
+        .btn{border:1px solid #cbd5e1;border-radius:8px;padding:4px 14px;font-size:12px;color:#475569;background:#fff;cursor:pointer;}
+        .btn.blue{background:#2563eb;color:#fff;border-color:#2563eb;}
+        .btn.green{background:#059669;color:#fff;border-color:#059669;}
+        .btn.gray{background:#e2e8f0;color:#475569;border-color:#e2e8f0;}
+        .split{display:flex;gap:16px;}
+        .left-col{flex:1.1;}
+        .right-col{flex:1;}
+        .info-row{display:flex;gap:10px;font-size:12px;color:#64748b;margin-bottom:8px;}
+        .info-box{background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:10px;flex:1;text-align:center;color:#b0b8c4;font-size:12px;}
+        .cand{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:12px;}
+        .cand .cn{font-weight:600;color:#1e3a8a;font-size:13px;}
+        .cand .cd{color:#94a3b8;font-size:11px;margin-top:2px;}
+        .cand .catline{color:#475569;font-size:11px;margin-top:4px;background:#f8fafc;border-radius:6px;padding:4px 8px;}
+        .conf-line{background:#f8fafc;border-radius:8px;padding:8px 10px;font-size:12px;color:#475569;margin-bottom:10px;}
+        .conf-line .step{color:#1e40af;font-weight:600;}
+        .conf-line .low{color:#94a3b8;}
+        .layers{display:flex;gap:14px;}
+        .layer-box{flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;}
+        .layer-box h4{margin:0 0 8px;font-size:13px;color:#334155;}
+        .lrow{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;font-size:12px;color:#94a3b8;margin-bottom:6px;}
+        .legend{font-size:12px;color:#94a3b8;line-height:1.9;margin-top:10px;}
+        .legend b{color:#475569;}
+        .pager{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:10px;font-size:12px;color:#94a3b8;}
+    </style>
+</head>
+<body>
+<div class="frame-flag">这是「竞争分析面板」框架线框（纯结构示意，未接真实数据）—— 请先看布局，再给我修改意见</div>
+<div class="wrap">
+    <h1>⚡ 竞争分析面板</h1>
+    <div class="sub">框架版 · 处理入口 + 状态总览 + 分层收敛展示（类 → 品 → 规格）</div>
+
+    <!-- ① 统计卡 -->
+    <div class="card">
+        <span class="card-tag">统计（可点击筛选）</span>
+        <div class="stats">
+            <div class="stat"><div class="n">4236</div><div class="t">竞品总数</div></div>
+            <div class="stat"><div class="n">2980</div><div class="t">待处理</div></div>
+            <div class="stat"><div class="n">205</div><div class="t">已粗对齐（品）</div></div>
+            <div class="stat"><div class="n">1011</div><div class="t">已对应（品+规格）</div></div>
+            <div class="stat"><div class="n">40</div><div class="t">无对应</div></div>
+        </div>
+    </div>
+
+    <!-- ② 店铺切换 -->
+    <div class="card">
+        <span class="card-tag gray">店铺切换</span>
+        <div class="shop-chips">
+            <span class="chip">全部店铺</span>
+            <span class="chip active">店A</span>
+            <span class="chip">店B</span>
+            <span class="chip">店C</span>
+            <span class="chip">… 共19家</span>
+        </div>
+    </div>
+
+    <!-- ③ 筛选栏 -->
+    <div class="card">
+        <span class="card-tag gray">筛选</span>
+        <div class="filters">
+            <span class="fbox">类目 ▾</span>
+            <span class="fbox">品牌 ▾</span>
+            <span class="fbox">收敛层级 ▾（未收敛/类/品/规格）</span>
+            <span class="fbox input">🔍 搜索竞品名 / 编号…</span>
+            <span class="fbox check">▢ 仅看待处理</span>
+            <span class="fbox check">▢ 仅锁定类目（搜索收窄）</span>
+        </div>
+    </div>
+
+    <!-- ④ 竞品列表（核心） -->
+    <div class="card">
+        <span class="card-tag">竞品列表（价值排序：月售高在前）</span>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:52px;">图</th>
+                    <th>竞品商品名（点击进详情）</th>
+                    <th style="width:80px;">品牌</th>
+                    <th style="width:76px;">价格</th>
+                    <th style="width:80px;">月售</th>
+                    <th style="width:110px;">收敛层级</th>
+                    <th style="width:90px;">状态</th>
+                    <th style="width:110px;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="demo">
+                    <td><div class="thumb">图</div></td>
+                    <td>示例A：公牛五孔插座（占位示意）</td>
+                    <td>公牛</td>
+                    <td>45</td>
+                    <td>500</td>
+                    <td><span class="badge b-sku">规格已锁定</span></td>
+                    <td><span class="badge b-sku">已对应</span></td>
+                    <td><button class="btn">查看详情</button></td>
+                </tr>
+                <tr class="demo">
+                    <td><div class="thumb">图</div></td>
+                    <td>示例B：佛山照明LED灯泡（占位示意）</td>
+                    <td>佛山照明</td>
+                    <td>18</td>
+                    <td>320</td>
+                    <td><span class="badge b-spu">品已锁定</span></td>
+                    <td><span class="badge b-spu">已粗对齐</span></td>
+                    <td><button class="btn">补规格 →</button></td>
+                </tr>
+                <tr class="demo">
+                    <td><div class="thumb">图</div></td>
+                    <td>示例C：德力西开关面板（占位示意）</td>
+                    <td>德力西</td>
+                    <td>30</td>
+                    <td>180</td>
+                    <td><span class="badge b-cat">类已锁定</span></td>
+                    <td><span class="badge b-none">待处理</span></td>
+                    <td><button class="btn blue">确认品 →</button></td>
+                </tr>
+                <tr class="demo">
+                    <td><div class="thumb">图</div></td>
+                    <td>示例D：杂牌插线板（占位示意，低置信）</td>
+                    <td>—</td>
+                    <td>25</td>
+                    <td>60</td>
+                    <td><span class="badge b-none">未收敛</span></td>
+                    <td><span class="badge b-none">待处理</span></td>
+                    <td><button class="btn blue">AI/搜索处理 →</button></td>
+                </tr>
+                <tr class="demo">
+                    <td><div class="thumb">图</div></td>
+                    <td>示例E：店铺赠品小件（占位示意）</td>
+                    <td>—</td>
+                    <td>2</td>
+                    <td>5</td>
+                    <td><span class="badge b-none">未收敛</span></td>
+                    <td><span class="badge b-nomatch">无对应</span></td>
+                    <td><button class="btn gray">恢复/重查</button></td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="pager">
+            <span>「⏭ 跳过低价值（月售&lt;10）」按钮位</span>
+            <span class="btn gray">← 上一页</span>
+            <span>第 1 / 85 页</span>
+            <span class="btn gray">下一页 →</span>
+        </div>
+    </div>
+
+    <!-- ⑤ 详情页框架（点击列表行后） -->
+    <div class="card">
+        <span class="card-tag">详情页（从列表点击后打开）</span>
+        <div style="margin-bottom:8px;font-size:12px;color:#64748b;">
+            <span class="btn gray">← 返回列表</span>
+            &nbsp; 店铺：示例店A &nbsp; <span class="badge b-cat">类已锁定</span> <span class="badge b-spu">品已锁定</span>
+        </div>
+        <div class="split">
+            <!-- 左：竞品信息 -->
+            <div class="left-col">
+                <div class="info-row">
+                    <div class="info-box">商品图片（占位）</div>
+                    <div class="info-box">竞品信息<br>名称/品牌/型号/类目/价格/月售（占位）</div>
+                </div>
+                <div class="conf-line">
+                    机器收敛：<span class="step">类：开关插座 ✓（置信0.92）</span> →
+                    <span class="step">品：公牛五孔 ✓（置信0.71）</span> →
+                    <span class="low">规格：未锁定（置信0.40 &lt; 0.55，待确认）</span>
+                </div>
+            </div>
+            <!-- 右：自家品对应区 -->
+            <div class="right-col">
+                <div class="cand">
+                    <div class="cn">候选品组1：公牛五孔插座（占位）</div>
+                    <div class="cd">品牌/型号/规格数/置信度（占位）</div>
+                    <div class="catline">🗂 类目映射：开关插座 → 开关插座类（确认此品时顺带确认）</div>
+                    <div style="margin-top:8px;">
+                        <button class="btn blue">确认此品（粗对齐）</button>
+                        <button class="btn">候选品组2…</button>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;margin-bottom:8px;">
+                    <span class="fbox input" style="flex:1;">🔍 搜索自家品（全库+范围优先）…</span>
+                    <button class="btn">AI 判断</button>
+                </div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">
+                    确认动作：<button class="btn green">确认对应（选规格，SKU+SPU同步）</button>
+                    <span style="margin-left:8px;">或</span>
+                    <button class="btn blue">确认此品（仅SPU层，规格后补）</button>
+                </div>
+                <div style="font-size:12px;color:#94a3b8;">
+                    若已对应：显示 自家品信息（售价/采购价/月销/条码/复制SKU）+ 已对应徽章
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ⑥ 人工确认页框架（两层已对应） -->
+    <div class="card">
+        <span class="card-tag">人工确认页（两层已对应结果查看）</span>
+        <div class="layers">
+            <div class="layer-box">
+                <h4>SPU 层 · 已粗对齐（品确定，规格待补）<span style="color:#94a3b8;font-weight:400;">（205）</span></h4>
+                <div class="lrow">示例：佛山照明LED灯泡 ↔ 自家：佛山照明LED灯泡组（占位）</div>
+                <div class="lrow">示例：德力西开关 ↔ 自家：德力西开关组（占位）</div>
+                <div style="margin-top:8px;"><button class="btn blue">补规格 →</button></div>
+            </div>
+            <div class="layer-box">
+                <h4>SKU 层 · 已对应（品+规格）<span style="color:#94a3b8;font-weight:400;">（1011）</span></h4>
+                <div class="lrow">示例：公牛五孔插座10A ↔ 自家：公牛五孔插座（占位）</div>
+                <div class="lrow">示例：公牛五孔插座16A ↔ 自家：公牛五孔插座（占位）</div>
+                <div style="margin-top:8px;"><span class="btn gray">查看/导出</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="legend">
+        <b>收敛层级徽章说明</b>：<span class="badge b-none">未收敛</span> 机器无把握（AI/搜索从零找） ·
+        <span class="badge b-cat">类已锁定</span> 只确定类目（待确认品） ·
+        <span class="badge b-spu">品已锁定</span> 品确定=已粗对齐（待确认规格） ·
+        <span class="badge b-sku">规格已锁定</span> 品+规格确定=已对应（完成） ·
+        <span class="badge b-nomatch">无对应</span> 已标记自家没有
+        <br>本页为框架示意，所有数据均为占位。请查看布局结构，指出要调整的地方（栏目增减 / 顺序 / 徽章样式 / 详情页分区等），确认后接入真实数据。
+    </div>
+</div>
+</body>
+</html>

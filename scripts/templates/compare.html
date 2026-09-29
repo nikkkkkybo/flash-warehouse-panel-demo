@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>同品对比 - 选品面板</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .cmp-grid { display: flex; gap: 12px; flex-wrap: wrap; }
+        .cmp-stat { flex: 1; min-width: 150px; background: #f8fafc; border: 1px solid #e2e8f0;
+                    border-radius: 10px; padding: 10px 14px; text-align: center; }
+        .cmp-stat .n { font-size: 20px; font-weight: 700; color: #1e3a8a; }
+        .cmp-stat .t { font-size: 12px; color: #64748b; margin-top: 2px; }
+        .cmp-tabs { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
+        .cmp-tab { padding: 5px 16px; border: 1px solid #cbd5e1; border-radius: 16px;
+                   font-size: 13px; color: #475569; background: #fff; text-decoration: none; }
+        .cmp-tab.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+        .badge-opp { background: #fee2e2; color: #991b1b; }
+        .badge-hot { background: #fef9c3; color: #854d0e; }
+        .badge-ok { background: #dcfce7; color: #166534; }
+        .brand-tag { display: inline-block; background: #eff6ff; color: #1e40af;
+                     border-radius: 6px; padding: 1px 8px; font-size: 12px; margin: 1px; }
+        .own-tag { display: inline-block; background: #ecfdf5; color: #065f46;
+                   border-radius: 6px; padding: 1px 8px; font-size: 12px; margin: 1px; }
+        .sub-note { font-size: 12px; color: #94a3b8; margin: 6px 0; }
+    </style>
+</head>
+<body>
+<div class="container">
+    {% set active = 'compare' %}
+    {% include "_nav.html" %}
+
+    <header class="main-header">
+        <h1>{% if view == 'product' %}📦 产品分析（品为单位：市场 vs 自家）{% else %}⚖ 同品对比（竞品 vs 自家 · 品牌/价格/月售同框）{% endif %}</h1>
+        <div class="stats">
+            {% if view == 'product' %}
+            <span class="stat-item stat-total">品总数 <strong>{{ stats.total }}</strong></span>
+            <span class="stat-item stat-pending">机会品 <strong>{{ stats.opp }}</strong></span>
+            <span class="stat-item stat-coarse">防守品 <strong>{{ stats.def }}</strong></span>
+            {% else %}
+            <span class="stat-item stat-total">对应总数 <strong>{{ stats.total }}</strong></span>
+            <span class="stat-item stat-nomatch">跨品牌 <strong>{{ stats.cross }}</strong></span>
+            <span class="stat-item stat-pending">机会（竞品卖得好） <strong>{{ stats.opp }}</strong></span>
+            {% endif %}
+        </div>
+    </header>
+
+    <main>
+        <!-- 视图 Tab：产品分析 / 销量前50 / 对比明细 -->
+        <div class="cmp-tabs">
+            <a href="/compare?shop={{ current_shop }}&view=product&filter=all" class="cmp-tab {% if view == 'product' %}active{% endif %}">📦 产品分析（品）</a>
+            <a href="/compare?shop={{ current_shop }}&view=top50" class="cmp-tab {% if view == 'top50' %}active{% endif %}">🏆 销量前50（人工匹配）</a>
+            <a href="/compare?shop={{ current_shop }}&view=detail&filter=all" class="cmp-tab {% if view == 'detail' %}active{% endif %}">⚖ 对比明细（SKU）</a>
+        </div>
+
+        <!-- 店铺切换 -->
+        <div class="shop-switcher">
+            {% for s in shops %}
+            <a href="/compare?shop={{ s.name | urlencode }}&view={{ view }}&filter={{ filter_f }}"
+               class="shop-chip {% if s.name == current_shop %}active{% endif %}">{{ s.name }}</a>
+            {% endfor %}
+        </div>
+
+        <!-- 筛选 Tab -->
+        <div class="cmp-tabs">
+            <a href="/compare?shop={{ current_shop }}&view={{ view }}&filter=all" class="cmp-tab {% if filter_f == 'all' %}active{% endif %}">全部</a>
+            {% if view == 'product' %}
+            <a href="/compare?shop={{ current_shop }}&view={{ view }}&filter=opportunity" class="cmp-tab {% if filter_f == 'opportunity' %}active{% endif %}">仅机会+防守</a>
+            <a href="/compare?shop={{ current_shop }}&view={{ view }}&filter=cross" class="cmp-tab {% if filter_f == 'cross' %}active{% endif %}">仅多品牌在卖</a>
+            {% else %}
+            <a href="/compare?shop={{ current_shop }}&view={{ view }}&filter=cross" class="cmp-tab {% if filter_f == 'cross' %}active{% endif %}">仅跨品牌</a>
+            <a href="/compare?shop={{ current_shop }}&view={{ view }}&filter=opportunity" class="cmp-tab {% if filter_f == 'opportunity' %}active{% endif %}">仅重点</a>
+            {% endif %}
+        </div>
+
+        {% if view == 'product' %}
+        <!-- 产品分析：品卡表 -->
+        <h3 style="margin:14px 0 6px;">📦 品分析卡（{% if filter_f == 'opportunity' %}仅机会+防守{% elif filter_f == 'cross' %}仅多品牌在卖{% else %}全部{% endif %} · 前200品）</h3>
+        {% if items %}
+        <table class="candidate-table">
+            <thead><tr>
+                <th style="width:16%;">品名</th><th>类目</th><th>自家品牌</th><th>自家月销</th><th>自家规格</th>
+                <th>自家售价区间</th><th>对应竞品</th><th>竞品总月售</th><th>最高月售</th>
+                <th>在卖品牌</th><th>竞品品牌</th><th>竞品价格带</th><th>结论</th><th style="width:22%;">建议</th>
+            </tr></thead>
+            <tbody>
+                {% for r in items %}
+                <tr>
+                    <td><a href="/product_detail?shop={{ current_shop | urlencode }}&spu={{ r.品组ID | urlencode }}"
+                           style="color:#1e293b;font-weight:600;text-decoration:none;" title="查看品详情">{{ r.品名 }}</a></td>
+                    <td style="font-size:12px;">{{ r.类目 }}</td>
+                    <td>{{ r.自家品牌 }}</td>
+                    <td><b>{{ r.自家月销 }}</b></td>
+                    <td>{{ r.自家规格数 }}</td>
+                    <td>{{ r.自家售价区间 }}</td>
+                    <td>{{ r.对应竞品数 }}</td>
+                    <td><b style="color:#dc2626;">{{ r.竞品总月售 }}</b></td>
+                    <td>{{ r.竞品最高月售 }}</td>
+                    <td>{{ r.在卖品牌数 }}</td>
+                    <td style="font-size:12px;">{% for b in (r.竞品品牌 or '').split('、') %}{% if b %}<span class="brand-tag">{{ b }}</span>{% endif %}{% endfor %}</td>
+                    <td>{{ r.竞品价格带 }}</td>
+                    <td>{% if r.结论 == '机会品' %}<span class="badge badge-opp">机会</span>
+                        {% elif r.结论 == '防守品' %}<span class="badge badge-hot">防守</span>
+                        {% elif r.结论 == '领先品' %}<span class="badge badge-ok">领先</span>
+                        {% else %}<span class="badge">观察</span>{% endif %}</td>
+                    <td style="font-size:12px;color:#475569;">{{ r.建议 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="sub-note">机会=竞品需求强自家弱（先看）；防守=双方都强（需守）；完整版见 output/产品分析建议.xlsx</div>
+        {% else %}<div class="sub-note">暂无数据（请先导入竞店并跑对齐）</div>{% endif %}
+
+        {% else %}
+        <!-- 品聚合（按类目） -->
+        <h3 style="margin:14px 0 6px;">📊 品聚合（按类目 · 竞品需求 vs 自家对应）</h3>
+        {% if agg_items %}
+        <table class="candidate-table">
+            <thead><tr>
+                <th>类目</th><th>对应竞品数</th><th>竞品总月售</th><th>最高月售</th>
+                <th>在卖品牌</th><th>品牌</th><th>自家月销合计</th><th>跨品牌数</th><th>判断</th>
+            </tr></thead>
+            <tbody>
+                {% for r in agg_items %}
+                <tr>
+                    <td><b>{{ r.竞品类目 }}</b></td>
+                    <td>{{ r.对应竞品数 }}</td>
+                    <td>{{ r.竞品总月售 }}</td>
+                    <td>{{ r.竞品最高月售 }}</td>
+                    <td>{{ r.在卖品牌数 }}</td>
+                    <td style="font-size:12px;">
+                        {% for b in (r.品牌 or '').split('、') %}{% if b %}<span class="brand-tag">{{ b }}</span>{% endif %}{% endfor %}
+                    </td>
+                    <td>{{ r.自家对应月销合计 }}</td>
+                    <td>{{ r.跨品牌对应数 }}</td>
+                    <td>{% if '机会' in r.判断 %}<span class="badge badge-opp">{{ r.判断 }}</span>
+                        {% elif '热销' in r.判断 %}<span class="badge badge-hot">{{ r.判断 }}</span>
+                        {% else %}<span class="badge badge-ok">{{ r.判断 }}</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="sub-note">仅显示前 50 个类目；完整版见 output/同品对比.xlsx</div>
+        {% else %}<div class="sub-note">暂无数据（请先导入竞店并跑对齐）</div>{% endif %}
+
+        <!-- 对比明细 -->
+        <h3 style="margin:18px 0 6px;">🔍 对比明细（{% if filter_f == 'cross' %}仅跨品牌{% elif filter_f == 'opportunity' %}仅重点（销量差距）{% else %}全部{% endif %} · 前200条）</h3>
+        {% if items %}
+        <table class="candidate-table">
+            <thead><tr>
+                <th style="width:22%;">竞品商品</th><th>竞品品牌</th><th>月售</th><th>到手价</th>
+                <th style="width:22%;">自家商品</th><th>自家品牌</th><th>月销</th><th>售价</th>
+                <th>销量差距</th><th>价差率</th><th>跨品牌</th><th>结论</th>
+            </tr></thead>
+            <tbody>
+                {% for r in items %}
+                <tr>
+                    <td><a href="/comp_detail?shop={{ current_shop | urlencode }}&sku={{ r.竞品Sku_id | urlencode }}" class="detail-link"
+                           title="查看详情">{{ r.竞品商品名 }}</a></td>
+                    <td><span class="brand-tag">{{ r.竞品品牌 }}</span></td>
+                    <td><b>{{ r.竞品月售 }}</b></td>
+                    <td>{{ r.竞品到手价 }}</td>
+                    <td><span class="own-tag">{{ r.自家商品名 }}</span></td>
+                    <td>{{ r.自家品牌 }}</td>
+                    <td>{{ r.自家月销 }}</td>
+                    <td>{{ r.自家售价 }}</td>
+                    <td>{% if r.销量差距 %}<b style="color:#dc2626;">{{ r.销量差距 }}</b>{% else %}-{% endif %}</td>
+                    <td>{{ r.价差率 }}</td>
+                    <td>{% if r.跨品牌 == '是' %}<b style="color:#dc2626;">是</b>{% else %}-{% endif %}</td>
+                    <td>{% if '重点' in r.结论 %}<span class="badge badge-opp">{{ r.结论 }}</span>
+                        {% elif '机会' in r.结论 or '更高' in r.结论 %}<span class="badge badge-hot">{{ r.结论 }}</span>
+                        {% else %}<span class="badge badge-ok">{{ r.结论 }}</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="sub-note">排序：跨品牌优先 → 销量差距（竞品在卖自家无销量 / 竞品更高）→ 月售降序。重点看「销量差距」标红的行——竞品卖得比我们好的同品</div>
+        {% else %}<div class="sub-note">该筛选下暂无数据</div>{% endif %}
+        {% endif %}
+    </main>
+</div>
+</body>
+</html>

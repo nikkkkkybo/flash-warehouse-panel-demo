@@ -1,0 +1,54 @@
+# -*- coding: utf-8 -*-
+# 选品打分维度权重配置 (v1 占位)
+# ======================================================================
+# 说明：
+#   - 本文件是阶段4/5 选品打分模型的维度权重「源文件」，供人工调整。
+#   - 阶段7 复盘库 (review_library.py) 会读取本文件，结合回看偏差给出
+#     权重调整「建议」；建议需人工确认后手动改本文件才生效，绝不自动改写。
+#   - 当前阶段4/5 尚未产出最终打分逻辑，此处先给出维度骨架与默认权重，
+#     后续接入真实打分时替换 dimensions 内容即可。
+#   - 读取方式：review_library.py 优先用 pyyaml 读取；若环境无 pyyaml，
+#     回退到脚本内内置的等价 dict（见 review_library.py 内 DEFAULT_WEIGHTS）。
+# ======================================================================
+
+scoring:
+  version: v1-placeholder
+  # 各维度权重，归一化前原始值（不必和为1，使用时会归一化）。
+  # direction: positive=分越高越该引入；negative=分越高越该谨慎。
+  dimensions:
+    热度分:
+      weight: 0.30
+      direction: positive
+      desc: 竞品热度分（月售归一化为主），反映市场真实需求强度
+    排名优势:
+      weight: 0.20
+      direction: positive
+      desc: 竞品在类目内/全表排名越靠前越优
+    利润空间:
+      weight: 0.25
+      direction: positive
+      desc: (建议售价-采购价)/建议售价，毛利越高越优
+    类目匹配度:
+      weight: 0.10
+      direction: positive
+      desc: 与本店现有类目结构匹配程度，越匹配越优
+    销量预期:
+      weight: 0.10
+      direction: positive
+      desc: 基于竞品月售推算的本店预期销量
+    供应链稳定度:
+      weight: 0.05
+      direction: positive
+      desc: 采购渠道稳定/库存可得性
+
+  # 归一化方式：使用时把 enabled 维度的 weight 按比例归一到 1.0
+  normalize: true
+
+# 回看 / 复盘参数
+lookback:
+  # 上架满 N 天后做回看，可同时配多个周期
+  review_days: [7, 14, 30]
+  # 偏差率阈值：|偏差率| 超过此值进复盘库
+  deviation_threshold: 0.50
+  # 建议单次调整幅度上限（相对原权重的比例），仅作建议、需人工确认
+  suggested_adjust_cap: 0.20

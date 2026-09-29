@@ -1,0 +1,37 @@
+# 源码库只放"可再生的东西"：代码 + 模板 + 配置模板 + 文档。
+# 业务数据、密钥、运行环境、打包成品一律不进（详见 README「仓库里为什么没有数据」）。
+
+# ---- 运行环境 / 打包成品 / 备份 ----
+.ftvenv/
+venv/
+dist/
+backup/
+__pycache__/
+*.py[cod]
+
+# ---- 密钥：真实 AI key 绝不入库 ----
+config/ai_config.yaml
+
+# ---- 业务数据（都可由导入+重算再生，含真实店名/价格/销量）----
+output/
+每日补货参考/
+自家商品库/
+题词向量库/
+config/import_uploads/
+scripts/progress.json
+scripts/models/
+
+# ---- 数据文件：只保留标准模板 ----
+*.xlsx
+!自家商品库_标准模板.xlsx
+
+# ---- 运行时残渣 ----
+*.log
+logs/
+.data.lock
+*.tmp
+scripts/_*.txt
+
+# ---- 编辑器/本地状态 ----
+.obsidian/
+.trae/

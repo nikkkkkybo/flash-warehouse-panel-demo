@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>反向查询 - 多维度</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        /* 查询类型切换 tab */
+        .query-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .query-tab {
+            padding: 8px 18px;
+            border: 1px solid #d1d5db;
+            background: #fff;
+            color: #475569;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .query-tab:hover { background: #f1f5f9; }
+        .query-tab.active {
+            background: #3b82f6;
+            color: #fff;
+            border-color: #3b82f6;
+        }
+
+        /* 输入框容器（按类型显隐） */
+        .input-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .input-row input[type="text"] {
+            flex: 1;
+            min-width: 280px;
+            padding: 9px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .input-row input:focus { outline: none; border-color: #3b82f6; }
+        .input-row select {
+            flex: 1;
+            min-width: 280px;
+            padding: 9px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            background: #fff;
+        }
+        .input-row select:focus { outline: none; border-color: #3b82f6; }
+        .input-row .btn { padding: 9px 22px; }
+
+        /* 模式说明 */
+        .mode-hint {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 6px;
+        }
+
+        /* 统计信息（类目模式） */
+        .cat-stats {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+        .cat-stat-item {
+            flex: 1;
+            min-width: 120px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 13px;
+        }
+        .cat-stat-item strong { display: block; font-size: 22px; margin-top: 2px; }
+        .cat-stat-total { background: #f1f5f9; color: #475569; }
+        .cat-stat-aligned { background: #dcfce7; color: #166534; }
+        .cat-stat-unaligned { background: #fee2e2; color: #991b1b; }
+        .cat-stat-rate { background: #eff6ff; color: #1e40af; }
+
+        /* SPU 分组 */
+        .spu-group {
+            background: #fff;
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .spu-group-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .spu-group-title .spu-badge {
+            display: inline-block;
+            background: #fef9c3;
+            color: #854d0e;
+            font-size: 12px;
+            padding: 2px 10px;
+            border-radius: 10px;
+            margin-left: 8px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- 顶部导航 -->
+    {% set active = 'tools' %}
+    {% include "_nav.html" %}
+
+    <!-- 标题 + 查询类型切换 -->
+    <div class="reverse-header">
+        <h1>🔁 反向查询：本店商品 → 竞品品</h1>
+
+        <!-- 查询类型 tab -->
+        <div class="query-tabs">
+            <div class="query-tab active" data-type="sku" onclick="switchType('sku')">SKU 查询</div>
+            <div class="query-tab" data-type="spu" onclick="switchType('spu')">SPU 查询</div>
+            <div class="query-tab" data-type="category" onclick="switchType('category')">类目查询</div>
+            <div class="query-tab" data-type="name" onclick="switchType('name')">商品名查询</div>
+        </div>
+
+        <!-- SKU 模式输入 -->
+        <div id="inputSku" class="input-row">
+            <input type="text" id="skuInput" placeholder="粘贴本店SKUID（支持模糊匹配）..." onkeypress="if(event.key==='Enter')doQuery()">
+            <button class="btn" onclick="doQuery()">查询</button>
+        </div>
+        <div class="mode-hint" data-for="sku">输入本店 SKUID，返回该 SKU 已确认对齐的所有竞品品，按竞店分组。</div>
+
+        <!-- SPU 模式输入 -->
+        <div id="inputSpu" class="input-row" style="display:none;">
+            <input type="text" id="spuInput" placeholder="粘贴本店SPUID（支持模糊匹配）..." onkeypress="if(event.key==='Enter')doQuery()">
+            <button class="btn" onclick="doQuery()">查询</button>
+        </div>
+        <div class="mode-hint" data-for="spu" style="display:none;">输入本店 SPUID，返回该 SPU 下所有 SKU 对应的竞品品，按 SKU 分组。</div>
+
+        <!-- 类目模式输入 -->
+        <div id="inputCategory" class="input-row" style="display:none;">
+            <select id="categorySelect" onkeypress="if(event.key==='Enter')doQuery()"></select>
+            <button class="btn" onclick="doQuery()">查询</button>
+        </div>
+        <div class="mode-hint" data-for="category" style="display:none;">选择三级类目，返回该类目下所有已确认对齐记录 + 统计信息（总品数/已对齐数/对齐率）。</div>
+
+        <!-- 商品名模式输入 -->
+        <div id="inputName" class="input-row" style="display:none;">
+            <input type="text" id="nameInput" placeholder="输入关键词，模糊匹配自家商品名..." onkeypress="if(event.key==='Enter')doQuery()">
+            <button class="btn" onclick="doQuery()">查询</button>
+        </div>
+        <div class="mode-hint" data-for="name" style="display:none;">输入关键词，返回自家商品名含该关键词的所有已确认对齐记录。</div>
+    </div>
+
+    <!-- 结果区 -->
+    <div id="resultArea" class="reverse-result-area">
+        <div class="reverse-empty">选择查询类型并输入内容后点击查询</div>
+    </div>
+</div>
+
+<script>
+// 当前查询类型
+let currentType = 'sku';
+let categoriesLoaded = false;
+
+// SKU全局存储：key=行内序号sid, value=ID字符串(全程字符串，绝不进JS数字字面量)
+// 解决19位SKU超过JS Number.MAX_SAFE_INTEGER(16位)导致的精度丢失
+const SKU_STORE = {};
+let _sku_seq = 0;
+function regSku(skuStr) {
+    const sid = _sku_seq++;
+    SKU_STORE[sid] = String(skuStr || '');
+    return sid;
+}
+
+// HTML转义
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// 占位图
+const PLACEHOLDER_IMG = 'data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22110%22 height=%22110%22><rect width=%22110%22 height=%22110%22 fill=%22%23f0f4f8%22/><text x=%2255%22 y=%2258%22 text-anchor=%22middle%22 fill=%22%23999%22 font-size=%2212%22>图片加载失败</text></svg>';
+
+// 复制ID（按sid从SKU_STORE取，避免19位数字精度丢失）
+function copySKUbySid(sid, btn) {
+    const sku = SKU_STORE[sid] || '';
+    if (!sku) { alert('ID为空'); return; }
+    const orig = btn ? btn.textContent : '';
+    const done = function() { if (btn) { btn.textContent = '✓已复制'; setTimeout(function(){ btn.textContent = orig; }, 1500); } };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(sku).then(done).catch(function(){ fallbackCopy(sku); done(); });
+    } else { fallbackCopy(sku); done(); }
+}
+function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(e){}
+    document.body.removeChild(ta);
+}
+
+// 切换查询类型
+function switchType(t) {
+    currentType = t;
+    document.querySelectorAll('.query-tab').forEach(function(el) {
+        el.classList.toggle('active', el.getAttribute('data-type') === t);
+    });
+    document.getElementById('inputSku').style.display = (t === 'sku') ? 'flex' : 'none';
+    document.getElementById('inputSpu').style.display = (t === 'spu') ? 'flex' : 'none';
+    document.getElementById('inputCategory').style.display = (t === 'category') ? 'flex' : 'none';
+    document.getElementById('inputName').style.display = (t === 'name') ? 'flex' : 'none';
+    document.querySelectorAll('.mode-hint').forEach(function(el) {
+        el.style.display = (el.getAttribute('data-for') === t) ? 'block' : 'none';
+    });
+    // 类目模式首次进入时加载类目列表
+    if (t === 'category' && !categoriesLoaded) {
+        loadCategories();
+    }
+    // 清空结果区
+    document.getElementById('resultArea').innerHTML = '<div class="reverse-empty">输入查询内容后点击查询</div>';
+}
+
+// 加载类目列表
+function loadCategories() {
+    const sel = document.getElementById('categorySelect');
+    sel.innerHTML = '<option value="">加载中...</option>';
+    fetch('/api/categories')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            categoriesLoaded = true;
+            if (!data.ok || !data.categories || data.categories.length === 0) {
+                sel.innerHTML = '<option value="">（无类目）' + escapeHtml(data.msg || '') + '</option>';
+                return;
+            }
+            let html = '<option value="">-- 请选择类目（共 ' + data.count + ' 个） --</option>';
+            data.categories.forEach(function(c) {
+                html += '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>';
+            });
+            sel.innerHTML = html;
+        })
+        .catch(function(err) {
+            sel.innerHTML = '<option value="">加载失败: ' + escapeHtml(err.message) + '</option>';
+        });
+}
+
+// 取当前查询值
+function getQueryValue() {
+    if (currentType === 'sku') return document.getElementById('skuInput').value.trim();
+    if (currentType === 'spu') return document.getElementById('spuInput').value.trim();
+    if (currentType === 'category') return document.getElementById('categorySelect').value.trim();
+    if (currentType === 'name') return document.getElementById('nameInput').value.trim();
+    return '';
+}
+
+// 查询
+function doQuery() {
+    const value = getQueryValue();
+    const area = document.getElementById('resultArea');
+    if (!value) {
+        area.innerHTML = '<div class="reverse-empty">请输入查询内容</div>';
+        return;
+    }
+    area.innerHTML = '<div class="reverse-empty">查询中...</div>';
+
+    const params = new URLSearchParams({type: currentType, value: value});
+    fetch('/api/reverse?' + params.toString())
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.count === 0 || (!data.results && !data.groups)) {
+                area.innerHTML = '<div class="reverse-empty">' + escapeHtml(data.msg || '无结果') + '</div>';
+                return;
+            }
+            if (currentType === 'sku') {
+                renderByShop(data.results);
+            } else if (currentType === 'spu') {
+                renderBySpu(data.groups || [], data.count, data.group_count);
+            } else if (currentType === 'category') {
+                renderCategory(data.results, data.stats, value);
+            } else if (currentType === 'name') {
+                renderByName(data.results, value);
+            }
+        })
+        .catch(function(err) {
+            area.innerHTML = '<div class="reverse-empty">查询出错: ' + escapeHtml(err.message) + '</div>';
+        });
+}
+
+// 渲染单条竞品卡片（复用）
+function renderCompCard(r) {
+    let html = '<div class="comp-card">';
+    if (r.竞品图片url) {
+        html += '<img class="comp-thumb" src="' + escapeHtml(r.竞品图片url) + '" onerror="this.onerror=null;this.src=\'' + PLACEHOLDER_IMG + '\';">';
+    } else {
+        html += '<div class="comp-thumb-placeholder">暂无图片</div>';
+    }
+    html += '<div class="comp-body">';
+    html += '<div class="comp-name">' + escapeHtml(r.竞品商品名 || '(无名称)') + '</div>';
+    html += '<div class="comp-meta">';
+    html += '<span class="price">到手价 ¥' + escapeHtml(r.竞品到手价 || '-') + '</span>';
+    html += '<span><b>月售:</b> ' + escapeHtml(r.竞品月售 || '-') + '</span>';
+    html += '<span><b>类目:</b> ' + escapeHtml(r.竞品类目 || '-') + '</span>';
+    html += '</div>';
+    html += '<div>';
+    html += '<span class="comp-match">匹配层: 第' + escapeHtml(r.匹配层 || '-') + '层</span>';
+    html += '<span class="comp-match">匹配依据: ' + escapeHtml(r.匹配依据 || '-') + '</span>';
+    html += '<span class="comp-match">置信度: ' + escapeHtml(r.置信度 || '-') + '</span>';
+    html += '</div>';
+    // 自家商品对比信息（与竞品并排展示，方便比价）
+    if (r.自家SKUID) {
+        html += '<div class="own-info-block">';
+        html += '<div class="own-info-title">🏠 自家商品（对比）</div>';
+        html += '<div class="own-info-name">' + escapeHtml(r.自家商品名 || '(无名称)') + '</div>';
+        html += '<div class="comp-meta">';
+        html += '<span class="price">售价 ¥' + escapeHtml(r.自家售价 || '-') + '</span>';
+        html += '<span><b>采购价:</b> ' + escapeHtml(r.自家采购价 || '-') + '</span>';
+        html += '<span><b>月销:</b> ' + escapeHtml(r.自家月销 || '-') + '</span>';
+        html += '</div>';
+        html += '<div class="comp-meta">';
+        html += '<span><b>规格:</b> ' + escapeHtml(r.自家规格 || '-') + '</span>';
+        html += '<span><b>条码:</b> ' + escapeHtml(r.自家条码 || '-') + '</span>';
+        html += '<span><b>有图:</b> ' + escapeHtml(r.自家有图 || '-') + '</span>';
+        html += '</div>';
+        html += '<div class="comp-meta"><span><b>品牌:</b> ' + escapeHtml(r.自家品牌 || '-') + '</span>';
+        html += '<span><b>类目:</b> ' + escapeHtml(r.自家类目 || '-') + '</span></div>';
+        html += '</div>';
+    }
+    // 全程用 sid 引用 ID，避免19位数字进 JS 字面量
+    const pidSid = regSku(r.竞品品ID);
+    const skuSid = regSku(r.竞品Sku_id);
+    const ownSid = regSku(r.自家SKUID);
+    const spuSid = regSku(r.自家SPUID);
+    html += '<div class="comp-ids">';
+    html += '<b>竞品品ID:</b> ' + escapeHtml(r.竞品品ID || '-') + ' <button class="copy-btn" onclick="copySKUbySid(' + pidSid + ', this)">复制竞品ID</button>';
+    html += ' &nbsp;|&nbsp; <b>竞品Sku_id:</b> ' + escapeHtml(r.竞品Sku_id || '-') + ' <button class="copy-btn" onclick="copySKUbySid(' + skuSid + ', this)">复制</button>';
+    html += '<br><b>自家SKUID:</b> ' + escapeHtml(r.自家SKUID || '-') + ' <button class="copy-btn" onclick="copySKUbySid(' + ownSid + ', this)">复制SKU</button>';
+    if (r.自家SPUID) {
+        html += ' &nbsp;|&nbsp; <b>自家SPUID:</b> ' + escapeHtml(r.自家SPUID) + ' <button class="copy-btn" onclick="copySKUbySid(' + spuSid + ', this)">复制SPU</button>';
+    }
+    if (r.自家商品名) {
+        html += '<br><b>自家商品名:</b> ' + escapeHtml(r.自家商品名);
+    }
+    if (r.自家类目) {
+        html += '<br><b>自家类目:</b> ' + escapeHtml(r.自家类目);
+    }
+    html += '</div>';
+    html += '</div>'; // comp-body
+    html += '</div>'; // comp-card
+    return html;
+}
+
+// SKU 模式：按竞店分组
+function renderByShop(results) {
+    const area = document.getElementById('resultArea');
+    let html = '<div class="reverse-summary">共找到 <b>' + results.length + '</b> 条已确认对齐的竞品品，按竞店分组如下：</div>';
+
+    const groups = {};
+    const groupOrder = [];
+    results.forEach(function(r) {
+        const shop = r.竞店名 || '(未知竞店)';
+        if (!groups[shop]) { groups[shop] = []; groupOrder.push(shop); }
+        groups[shop].push(r);
+    });
+
+    groupOrder.forEach(function(shop) {
+        const items = groups[shop];
+        html += '<div class="shop-group">';
+        html += '<div class="shop-group-title">竞店(类型ID)：' + escapeHtml(shop) + '<span class="shop-badge">' + items.length + ' 条</span></div>';
+        items.forEach(function(r) { html += renderCompCard(r); });
+        html += '</div>';
+    });
+
+    area.innerHTML = html;
+}
+
+// SPU 模式：按自家SKUID分组
+function renderBySpu(groups, totalCount, groupCount) {
+    const area = document.getElementById('resultArea');
+    let html = '<div class="reverse-summary">共找到 <b>' + totalCount + '</b> 条已确认对齐记录，分布在 <b>' + groupCount + '</b> 个自家SKU下：</div>';
+
+    groups.forEach(function(g) {
+        html += '<div class="spu-group">';
+        const ownSid = regSku(g.自家SKUID);
+        const spuSid = regSku(g.自家SPUID);
+        html += '<div class="shop-group-title">自家SKU：' + escapeHtml(g.自家SKUID || '-') + ' <button class="copy-btn" onclick="copySKUbySid(' + ownSid + ', this)">复制SKU</button>';
+        if (g.自家SPUID) {
+            html += ' &nbsp;|&nbsp; SPU：' + escapeHtml(g.自家SPUID) + ' <button class="copy-btn" onclick="copySKUbySid(' + spuSid + ', this)">复制SPU</button>';
+        }
+        html += '<span class="spu-badge">' + g.items.length + ' 条竞品</span></div>';
+        if (g.自家商品名) {
+            html += '<div style="color:#475569;font-size:13px;margin-bottom:10px;">商品名：' + escapeHtml(g.自家商品名) + '</div>';
+        }
+        g.items.forEach(function(r) { html += renderCompCard(r); });
+        html += '</div>';
+    });
+
+    area.innerHTML = html;
+}
+
+// 类目模式：统计 + 列表
+function renderCategory(results, stats, categoryName) {
+    const area = document.getElementById('resultArea');
+    let html = '<div class="reverse-summary">类目：<b>' + escapeHtml(categoryName) + '</b></div>';
+
+    if (stats) {
+        html += '<div class="cat-stats">';
+        html += '<div class="cat-stat-item cat-stat-total">该类目自家总品数<strong>' + stats.total_in_own + '</strong></div>';
+        html += '<div class="cat-stat-item cat-stat-aligned">已对齐SKU数<strong>' + stats.aligned_sku_count + '</strong></div>';
+        html += '<div class="cat-stat-item cat-stat-unaligned">未对齐SKU数<strong>' + stats.unaligned_count + '</strong></div>';
+        html += '<div class="cat-stat-item cat-stat-rate">对齐率<strong>' + stats.align_rate + '%</strong></div>';
+        html += '</div>';
+    }
+
+    html += '<div class="reverse-summary">已对齐记录共 <b>' + results.length + '</b> 条：</div>';
+
+    if (results.length === 0) {
+        html += '<div class="reverse-empty">该类目暂无已确认对齐记录</div>';
+    } else {
+        // 按竞店分组（复用）
+        const groups = {};
+        const groupOrder = [];
+        results.forEach(function(r) {
+            const shop = r.竞店名 || '(未知竞店)';
+            if (!groups[shop]) { groups[shop] = []; groupOrder.push(shop); }
+            groups[shop].push(r);
+        });
+        groupOrder.forEach(function(shop) {
+            const items = groups[shop];
+            html += '<div class="shop-group">';
+            html += '<div class="shop-group-title">竞店(类型ID)：' + escapeHtml(shop) + '<span class="shop-badge">' + items.length + ' 条</span></div>';
+            items.forEach(function(r) { html += renderCompCard(r); });
+            html += '</div>';
+        });
+    }
+
+    area.innerHTML = html;
+}
+
+// 商品名模式：列表展示
+function renderByName(results, keyword) {
+    const area = document.getElementById('resultArea');
+    let html = '<div class="reverse-summary">关键词 "<b>' + escapeHtml(keyword) + '</b>" 匹配到 <b>' + results.length + '</b> 条已确认对齐记录：</div>';
+
+    // 按竞店分组
+    const groups = {};
+    const groupOrder = [];
+    results.forEach(function(r) {
+        const shop = r.竞店名 || '(未知竞店)';
+        if (!groups[shop]) { groups[shop] = []; groupOrder.push(shop); }
+        groups[shop].push(r);
+    });
+    groupOrder.forEach(function(shop) {
+        const items = groups[shop];
+        html += '<div class="shop-group">';
+        html += '<div class="shop-group-title">竞店(类型ID)：' + escapeHtml(shop) + '<span class="shop-badge">' + items.length + ' 条</span></div>';
+        items.forEach(function(r) { html += renderCompCard(r); });
+        html += '</div>';
+    });
+
+    area.innerHTML = html;
+}
+
+// 支持 URL 参数预填（兼容旧版 ?sku=xxx，新增 ?type=xxx&value=xxx）
+window.onload = function() {
+    const params = new URLSearchParams(window.location.search);
+    const urlType = params.get('type');
+    const urlValue = params.get('value');
+    const legacySku = params.get('sku');
+
+    if (urlType && urlValue) {
+        switchType(urlType);
+        if (urlType === 'sku') document.getElementById('skuInput').value = urlValue;
+        else if (urlType === 'spu') document.getElementById('spuInput').value = urlValue;
+        else if (urlType === 'name') document.getElementById('nameInput').value = urlValue;
+        else if (urlType === 'category') {
+            // 等类目加载完再选
+            const trySelect = function() {
+                if (!categoriesLoaded) { setTimeout(trySelect, 200); return; }
+                const sel = document.getElementById('categorySelect');
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === urlValue) { sel.value = urlValue; break; }
+                }
+                doQuery();
+            };
+            trySelect();
+            return;
+        }
+        doQuery();
+    } else if (legacySku) {
+        document.getElementById('skuInput').value = legacySku;
+        doQuery();
+    }
+};
+</script>
+</body>
+</html>

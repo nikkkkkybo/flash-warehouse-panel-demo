@@ -1,0 +1,433 @@
+{% if show_assistant %}
+<!-- ═══ AI 小助手：聊天窗口（一个入口、能动手） ═══
+     工具全本地只读（0 成本、当期缓存）；数字只来自工具返回；链接只渲染服务端给的。 -->
+<style>
+.asst-fab{position:fixed;right:20px;bottom:20px;z-index:900;display:flex;align-items:center;gap:8px;
+  background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none;border-radius:999px;
+  padding:12px 18px;font-size:14px;cursor:pointer;box-shadow:0 6px 18px rgba(79,70,229,.35);
+  transition:transform .15s}
+.asst-fab:hover{transform:translateY(-2px)}
+.asst-fab .dot{width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 6px #4ade80}
+.asst-drawer{position:fixed;right:0;top:0;bottom:0;width:440px;max-width:94vw;z-index:901;
+  background:#fff;box-shadow:-6px 0 24px rgba(0,0,0,.14);transform:translateX(105%);
+  transition:transform .22s ease;display:flex;flex-direction:column}
+.asst-drawer.open{transform:translateX(0)}
+.asst-head{padding:12px 16px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;flex-shrink:0}
+.asst-head h3{margin:0;font-size:15px}
+.asst-head .scope{font-size:12px;opacity:.9;margin-top:3px}
+.asst-close{position:absolute;right:10px;top:10px;background:rgba(255,255,255,.2);border:none;color:#fff;
+  border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:15px}
+.asst-msgs{flex:1;overflow-y:auto;padding:12px 14px;background:#f8fafc}
+.asst-msg{margin-bottom:12px;display:flex;flex-direction:column}
+.asst-msg.user{align-items:flex-end}
+.asst-bubble{max-width:88%;padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.6;
+  white-space:pre-wrap;word-break:break-word}
+.asst-msg.user .asst-bubble{background:#4f46e5;color:#fff;border-bottom-right-radius:4px}
+.asst-msg.bot .asst-bubble{background:#fff;border:1px solid #e5e7eb;color:#0f172a;border-bottom-left-radius:4px}
+.asst-msg.bot.err .asst-bubble{background:#fef2f2;border-color:#fecaca;color:#991b1b}
+.asst-trace{font-size:11px;color:#94a3b8;margin-top:4px;display:flex;flex-wrap:wrap;gap:4px}
+.asst-trace .tt{background:#eef2ff;border:1px solid #e0e7ff;color:#4338ca;border-radius:999px;
+  padding:2px 8px;white-space:nowrap}
+.asst-links{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px}
+.asst-links a{font-size:12px;color:#7c3aed;background:#f5f3ff;border:1px solid #ddd6fe;
+  border-radius:8px;padding:4px 10px;text-decoration:none;white-space:nowrap;max-width:200px;
+  overflow:hidden;text-overflow:ellipsis}
+.asst-links a:hover{background:#ede9fe}
+/* 产品卡片（focus）：比 chips 更直观，带数字可点开 */
+.asst-cards{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.asst-card{display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid #e2e8f0;
+  border-radius:10px;padding:8px 10px;text-decoration:none;color:inherit;transition:border-color .12s}
+.asst-card:hover{border-color:#5eead4;background:#f0fdfa}
+.asst-card.kind-own:hover{border-color:#93c5fd;background:#eff6ff}
+.asst-card .n{font-size:11px;font-weight:600;color:#94a3b8;min-width:18px;padding-top:2px}
+.asst-card .body{flex:1;min-width:0}
+.asst-card .nm{font-size:13px;font-weight:600;color:#0f172a;line-height:1.35;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.asst-card .mt{font-size:11.5px;color:#64748b;margin-top:3px;line-height:1.4;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.asst-card .mt b{color:#0f766e;font-weight:600}
+.asst-card.kind-own .mt b{color:#1d4ed8}
+.asst-card .go{font-size:11px;color:#94a3b8;flex-shrink:0;padding-top:2px}
+.asst-cardhead{display:flex;justify-content:space-between;align-items:center;margin-top:8px;
+  font-size:11.5px;color:#64748b}
+.asst-cardhead a{color:#0d9488;font-weight:600;text-decoration:none}
+.asst-cardhead a:hover{text-decoration:underline}
+.asst-focus{margin-top:6px;display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.asst-focus .fl{font-size:11px;color:#64748b;margin-right:2px}
+.asst-focus a{font-size:11.5px;color:#0f766e;background:#f0fdfa;border:1px solid #99f6e4;
+  border-radius:999px;padding:3px 9px;text-decoration:none;white-space:nowrap;max-width:160px;
+  overflow:hidden;text-overflow:ellipsis}
+.asst-focus a:hover{background:#ccfbf1}
+.asst-focus a.kind-own{color:#1d4ed8;background:#eff6ff;border-color:#bfdbfe}
+.asst-focus a.kind-own:hover{background:#dbeafe}
+.asst-focusbar{margin-top:4px;padding:6px 12px;background:#f8fafc;border-top:1px solid #f1f5f9;
+  font-size:11.5px;color:#475569;display:none;flex-shrink:0}
+.asst-focusbar.on{display:block}
+.asst-focusbar .n{font-weight:600;color:#0f766e}
+.asst-focusbar .clear{float:right;cursor:pointer;color:#94a3b8}
+.asst-focusbar .clear:hover{color:#dc2626}
+.asst-home{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12.5px}
+.asst-home .big{font-size:13.5px;font-weight:600;color:#0f172a}
+.asst-home .meta{font-size:11.5px;color:#64748b;margin-top:3px;line-height:1.5}
+.asst-item{border-top:1px dashed #e2e8f0;padding:6px 0 5px;color:#334155}
+.asst-item .r{display:flex;gap:6px;align-items:baseline;justify-content:space-between}
+.asst-item a{font-size:11.5px;color:#7c3aed;text-decoration:none;white-space:nowrap}
+.asst-chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 8px}
+.asst-chip{font-size:12px;color:#4338ca;background:#eef2ff;border:1px solid #e0e7ff;border-radius:999px;
+  padding:5px 12px;cursor:pointer}
+.asst-chip:hover{background:#e0e7ff}
+.asst-inputbar{display:flex;gap:8px;padding:10px 14px;border-top:1px solid #f3f4f6;flex-shrink:0;
+  background:#fff;align-items:center}
+.asst-inputbar input{flex:1;padding:9px 12px;border:1px solid #cbd5e1;border-radius:10px;font-size:13px;
+  outline:none}
+.asst-inputbar input:focus{border-color:#7c3aed}
+.asst-inputbar button{background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none;
+  border-radius:10px;padding:9px 16px;font-size:13px;cursor:pointer;white-space:nowrap}
+.asst-inputbar button:disabled{opacity:.55;cursor:wait}
+.asst-foot{padding:5px 14px 9px;border-top:1px solid #f3f4f6;font-size:11px;color:#9ca3af;flex-shrink:0;
+  display:flex;justify-content:space-between;align-items:center}
+.asst-foot label{display:flex;align-items:center;gap:4px;cursor:pointer}
+.typing{display:inline-block}
+.typing i{width:5px;height:5px;border-radius:50%;background:#7c3aed;display:inline-block;margin:0 1.5px;
+  animation:asstblink 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@keyframes asstblink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.asst-sessbar{display:flex;align-items:center;gap:8px;padding:7px 14px;border-bottom:1px solid #f1f5f9;
+  flex-shrink:0;background:#fff;font-size:12px}
+.asst-sessbar .new{border:1px solid #e0e7ff;color:#4338ca;background:#eef2ff;border-radius:999px;
+  padding:3px 10px;cursor:pointer;white-space:nowrap}
+.asst-sessbar .cur{color:#475569;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  cursor:pointer;text-align:right}
+.asst-sesslist{display:none;position:absolute;top:96px;right:10px;width:280px;max-width:88vw;z-index:910;
+  background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.13);
+  max-height:320px;overflow-y:auto}
+.asst-sesslist .si{display:flex;justify-content:space-between;gap:6px;padding:8px 11px;cursor:pointer;
+  border-bottom:1px dashed #f1f5f9;font-size:12px;align-items:center}
+.asst-sesslist .si:hover{background:#f8fafc}
+.asst-sesslist .si.on{background:#eef2ff}
+.asst-sesslist .si .t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.asst-sesslist .si .meta{font-size:10.5px;color:#94a3b8;white-space:nowrap}
+.asst-sesslist .si .del{color:#dc2626;cursor:pointer;padding:0 3px}
+.asst-sesslist .empty{padding:14px;text-align:center;color:#9ca3af;font-size:12px}
+.asst-mask{position:fixed;inset:0;background:rgba(0,0,0,.22);z-index:899;display:none}
+</style>
+<div class="asst-mask" id="asstMask"></div>
+<button class="asst-fab" id="asstFab" title="AI 小助手：问数据、找问题、带你去操作">
+  <span class="dot"></span> AI 小助手
+</button>
+<div class="asst-drawer" id="asstDrawer">
+  <div class="asst-head">
+    <h3>🧠 AI 小助手</h3>
+    <div class="scope" id="asstScope">范围：{{ current_shop or '（未选店）' }}</div>
+    <button class="asst-close" id="asstClose">✕</button>
+  </div>
+  <div class="asst-sessbar">
+    <span class="new" id="asstSessNew">＋ 新会话</span>
+    <a class="new" id="asstSessExp" style="display:none;text-decoration:none" title="导出本会话：对话记录 + 工具数据表">⬇ 导出</a>
+    <span class="cur" id="asstSessCur">🕘 会话记忆</span>
+  </div>
+  <div class="asst-sesslist" id="asstSessList"></div>
+  <div class="asst-msgs" id="asstMsgs"></div>
+  <div class="asst-focusbar" id="asstFocusBar"></div>
+  <div class="asst-chips" id="asstChips"></div>
+  <div class="asst-inputbar">
+    <input id="asstInput" placeholder="例如：这家店最该先看哪几个机会品？">
+    <button id="asstSend">发送</button>
+  </div>
+  <div class="asst-foot">
+    <span id="asstFootTxt">数字来自本地工具（当期数据），重要决策请复核。</span>
+    <label><input type="checkbox" id="asstMock"> 演示模式</label>
+  </div>
+</div>
+<script>
+(function () {
+  const SHOP = {{ (current_shop or '') | tojson }};
+  const SS_KEY = "asst_chat_v1";
+  let st = { open: false, sid: "", msgs: [], home: null };
+  try { Object.assign(st, JSON.parse(sessionStorage.getItem(SS_KEY) || "{}") || {}); } catch (e) {}
+  st.msgs = (st.msgs || []).slice(-20);
+  const save = () => { try { sessionStorage.setItem(SS_KEY, JSON.stringify(st)); } catch (e) {} };
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s === null || s === undefined ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const fab = $("asstFab"), drawer = $("asstDrawer"), mask = $("asstMask");
+
+  function open() { drawer.classList.add("open"); mask.style.display = "block"; st.open = true; save();
+                    if (!st.msgs.length) boot(); }
+  function close() { drawer.classList.remove("open"); mask.style.display = "none"; st.open = false; save(); }
+  fab.onclick = open; $("asstClose").onclick = close; mask.onclick = close;
+
+  /* ── 欢迎卡：台账摘要（0 元、可回溯）── */
+  async function loadHome() {
+    try {
+      const j = await (await fetch("/api/assistant/home" + (SHOP ? "?shop=" + encodeURIComponent(SHOP) : ""),
+                                   { credentials: "same-origin" })).json();
+      if (!j.ok) return null;
+      st.home = { open: j.open, total: j.total, caliber: j.caliber, updated: j.updated, obs: j.obs_note };
+      save(); return st.home;
+    } catch (e) { return null; }
+  }
+
+  function homeHtml(h) {
+    if (!h) return "";
+    if (!h.total)
+      return '<div class="big">📒 台账还是空的</div><div class="meta">规则层会全量筛「人眼看不出」的问题（0 元）。可在分析页点「重新扫描」。</div>';
+    return '<div class="big">📒 台账 ' + h.open + ' 条未处理</div>'
+      + '<div class="meta">' + esc((h.caliber || "").slice(0, 90)) + '</div>'
+      + '<div class="meta"><a href="/analysis" style="color:#7c3aed">看完整台账 →</a></div>';
+  }
+
+  function bubble(role, text, trace, links, err, idx, focus) {
+    const wrap = document.createElement("div");
+    wrap.className = "asst-msg " + (role === "user" ? "user" : "bot" + (err ? " err" : ""));
+    const b = document.createElement("div");
+    b.className = "asst-bubble";
+    b.textContent = text;                      /* 一律 textContent，防注入破版 */
+    wrap.appendChild(b);
+    if (role !== "user" && trace && trace.length) {
+      const t = document.createElement("div");
+      t.className = "asst-trace";
+      t.innerHTML = trace.map(x => '<span class="tt">🔎 ' + esc(x.tool) + ' · ' + x.rows + ' 行' +
+        (x.ms ? ' · ' + x.ms + 'ms' : '') + '</span>').join("");
+      wrap.appendChild(t);
+    }
+    /* focus 产品卡片：AI 点名的品，带数字、可点开（harness → 工具侧） */
+    if (role !== "user" && focus && focus.length) {
+      const head = document.createElement("div");
+      head.className = "asst-cardhead";
+      const lab = document.createElement("span");
+      lab.textContent = "相关商品 " + focus.length;
+      head.appendChild(lab);
+      const compSkus = focus.filter(f => f && f.kind === "comp" && f.sku).map(f => f.sku);
+      if (compSkus.length >= 2) {
+        const a2 = document.createElement("a");
+        a2.href = "/browse?shop=" + encodeURIComponent((focus.find(f => f.shop && f.kind === "comp") || {}).shop || SHOP || "") +
+                  "&focus_skus=" + encodeURIComponent(compSkus.slice(0, 30).join(","));
+        a2.textContent = "在列表中筛选 →";
+        head.appendChild(a2);
+      }
+      wrap.appendChild(head);
+      const F = document.createElement("div");
+      F.className = "asst-cards";
+      focus.forEach((f, i) => {
+        if (!f) return;
+        const a = document.createElement("a");
+        a.className = "asst-card" + (f.kind === "own" ? " kind-own" : "");
+        a.href = f.url || "#";
+        if (!f.url) a.style.pointerEvents = "none";
+        const n = document.createElement("span");
+        n.className = "n";
+        n.textContent = String(i + 1);
+        const body = document.createElement("div");
+        body.className = "body";
+        const nm = document.createElement("div");
+        nm.className = "nm";
+        nm.textContent = f.name || f.sku || f.own_gid || "品";
+        body.appendChild(nm);
+        const meta = f.meta || {};
+        const parts = [];
+        Object.keys(meta).forEach(k => {
+          if (parts.length >= 3) return;
+          parts.push(esc(k) + " <b>" + esc(meta[k]) + "</b>");
+        });
+        if (f.shop && f.kind === "comp") parts.push(esc(String(f.shop).slice(0, 10)));
+        if (parts.length) {
+          const mt = document.createElement("div");
+          mt.className = "mt";
+          mt.innerHTML = parts.join(" · ");
+          body.appendChild(mt);
+        }
+        a.appendChild(n);
+        a.appendChild(body);
+        const go = document.createElement("span");
+        go.className = "go";
+        go.textContent = "→";
+        a.appendChild(go);
+        F.appendChild(a);
+      });
+      wrap.appendChild(F);
+    }
+    if (role !== "user" && links && links.length) {
+      const L = document.createElement("div");
+      L.className = "asst-links";
+      links.forEach(l => {
+        const a = document.createElement("a");
+        a.href = l.url; a.textContent = "→ " + (l.label || "查看");
+        a.target = "_self";
+        L.appendChild(a);
+      });
+      wrap.appendChild(L);
+    }
+    /* ⬇ 完整版：该条回答引用的全部底板数据（含完整版板块表），0 元导出 */
+    if (role !== "user" && idx !== null && idx !== undefined &&
+        (trace || []).some(x => (x.data && x.data.length) || (x.full && Object.keys(x.full).length))) {
+      const L2 = document.createElement("div");
+      L2.className = "asst-links";
+      const a2 = document.createElement("a");
+      a2.href = "/api/assistant/export?sid=" + encodeURIComponent(st.sid || "") +
+                "&idx=" + encodeURIComponent(idx);
+      a2.textContent = "⬇ 完整版 Excel（本条依据的全部数据）";
+      L2.appendChild(a2);
+      wrap.appendChild(L2);
+    }
+    return wrap;
+  }
+
+  function focusBar(focus) {
+    const bar = $("asstFocusBar");
+    if (!focus || !focus.length) { bar.className = "asst-focusbar"; bar.innerHTML = ""; return; }
+    bar.className = "asst-focusbar on";
+    const names = focus.slice(0, 4).map(f => (f.name || "").slice(0, 10)).filter(Boolean).join("、");
+    bar.innerHTML = '<span class="n">当前关注 ' + focus.length + ' 个品</span>：' + esc(names) +
+      (focus.length > 4 ? "…" : "") +
+      ' <span class="clear" id="asstFocusClear" title="清除关注">✕</span>';
+    const c = $("asstFocusClear");
+    if (c) c.onclick = () => { bar.className = "asst-focusbar"; bar.innerHTML = ""; };
+  }
+
+  function typing() {
+    const wrap = document.createElement("div");
+    wrap.className = "asst-msg bot";
+    wrap.id = "asstTyping";
+    wrap.innerHTML = '<div class="asst-bubble"><span class="typing"><i></i><i></i><i></i></span> 查数据中…</div>';
+    return wrap;
+  }
+
+  function render() {
+    const box = $("asstMsgs");
+    box.innerHTML = "";
+    if (st.home) {
+      const h = document.createElement("div");
+      h.className = "asst-home";
+      h.innerHTML = homeHtml(st.home);
+      box.appendChild(h);
+    }
+    let lastFocus = null;
+    st.msgs.forEach(m => {
+      box.appendChild(bubble(m.role, m.text, m.trace, m.links, m.err, m.idx, m.focus));
+      if (m.focus && m.focus.length) lastFocus = m.focus;
+    });
+    focusBar(lastFocus);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  async function send(q) {
+    q = (q || $("asstInput").value || "").trim();
+    if (!q) return;
+    $("asstInput").value = "";
+    st.msgs.push({ role: "user", text: q });
+    render();
+    const box = $("asstMsgs");
+    const tp = typing(); box.appendChild(tp); box.scrollTop = box.scrollHeight;
+    const btn = $("asstSend"); btn.disabled = true;
+    const history = st.msgs.slice(-10).map(m => ({ role: m.role, content: m.text }));
+    try {
+      const r = await fetch("/api/assistant/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ messages: history, shop: SHOP || "", mock: $("asstMock").checked,
+                               sid: st.sid || "" })
+      });
+      const j = await r.json();
+      tp.remove();
+      if (!j.ok) {
+        st.msgs.push({ role: "assistant", text: j.msg || "出了点问题，稍后再试", err: true });
+      } else {
+        if (j.sid && j.sid !== st.sid) { st.sid = j.sid; save(); loadSessions(); }
+        st.msgs.push({ role: "assistant", text: j.answer, trace: j.trace, links: j.links,
+                       idx: j.aidx, focus: j.focus || [] });
+      }
+      st.msgs = st.msgs.slice(-20);
+      save(); render();
+    } catch (e) {
+      tp.remove();
+      st.msgs.push({ role: "assistant", text: "请求失败：" + e, err: true });
+      save(); render();
+    } finally { btn.disabled = false; $("asstInput").focus(); }
+  }
+
+  /* ── 会话记忆（服务端落盘，可回溯） ── */
+  async function loadSessions() {
+    try {
+      const j = await (await fetch("/api/assistant/sessions", { credentials: "same-origin" })).json();
+      const box = $("asstSessList");
+      const list = j.sessions || [];
+      box.innerHTML = list.length ? "" : '<div class="empty">还没有历史会话</div>';
+      list.forEach(s => {
+        const el = document.createElement("div");
+        el.className = "si" + (s.sid === st.sid ? " on" : "");
+        const t = document.createElement("span"); t.className = "t"; t.textContent = s.title || "会话";
+        const m = document.createElement("span"); m.className = "meta";
+        m.textContent = (s.count || 0) + "条 · " + (s.shop || "").slice(0, 6);
+        const d = document.createElement("span"); d.className = "del"; d.textContent = "✕";
+        d.title = "删除会话";
+        d.onclick = async (ev) => { ev.stopPropagation();
+          await fetch("/api/assistant/sessions", { method: "POST",
+            headers: { "Content-Type": "application/json" }, credentials: "same-origin",
+            body: JSON.stringify({ action: "delete", sid: s.sid }) });
+          if (s.sid === st.sid) { st.sid = ""; st.msgs = []; st.home = null; save(); boot(); }
+          loadSessions(); };
+        el.appendChild(t); el.appendChild(m); el.appendChild(d);
+        el.onclick = () => { box.style.display = "none"; switchSession(s.sid); };
+        box.appendChild(el);
+      });
+    } catch (e) {}
+  }
+
+  async function switchSession(sid) {
+    try {
+      const j = await (await fetch("/api/assistant/chat/history?sid=" + encodeURIComponent(sid),
+                                   { credentials: "same-origin" })).json();
+      st.sid = sid;
+      st.msgs = (j.messages || []).map(m => ({
+        role: m.role === "user" ? "user" : "assistant",
+        text: m.text, trace: m.trace, links: m.links, focus: m.focus || [],
+        err: (m.role !== "user" && /^失败|请求失败|助手异常/.test(m.text || "")) }));
+      st.msgs.forEach((m, i) => { if (m.role !== "user") m.idx = i; });  /* idx=jsonl 行号，单条导出用 */
+      st.msgs = st.msgs.slice(-20);
+      st.home = null;   /* 历史会话不重挂欢迎卡，直接看消息 */
+      save(); render();
+      $("asstSessCur").textContent = "🕘 " + (sid ? "已切换会话" : "会话记忆");
+    } catch (e) {}
+  }
+
+  $("asstSessNew").onclick = () => { st.sid = ""; st.msgs = []; st.home = null; save(); boot(); };
+  $("asstSessCur").onclick = () => {
+    const b = $("asstSessList");
+    b.style.display = (b.style.display === "block") ? "none" : "block";
+    if (b.style.display === "block") loadSessions();
+  };
+  /* 导出本会话 Excel（有会话才可点） */
+  const syncExp = () => {
+    const e = $("asstSessExp");
+    e.style.display = st.sid ? "inline-block" : "none";
+    e.href = "/api/assistant/export?sid=" + encodeURIComponent(st.sid || "");
+  };
+  const _render0 = render;
+  render = function () { _render0(); syncExp(); };
+
+  function chips() {
+    const list = SHOP ? ["这周该先处理什么？", "机会品前 5 名", "最近谁在降价？",
+                        "台账有什么要紧的？", "数据到什么时候？"]
+                      : ["数据到什么时候？"];
+    const box = $("asstChips");
+    box.innerHTML = "";
+    list.forEach(t => {
+      const c = document.createElement("span");
+      c.className = "asst-chip"; c.textContent = t;
+      c.onclick = () => send(t);
+      box.appendChild(c);
+    });
+  }
+
+  async function boot() {
+    if (!st.home) { st.home = await loadHome(); }
+    render(); chips();
+  }
+
+  $("asstSend").onclick = () => send();
+  $("asstInput").addEventListener("keydown", (ev) => { if (ev.key === "Enter") send(); });
+  if (st.open) { drawer.classList.add("open"); mask.style.display = "block"; render(); chips(); }
+})();
+</script>
+{% endif %}

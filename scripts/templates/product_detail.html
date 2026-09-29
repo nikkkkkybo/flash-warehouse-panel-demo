@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>产品详情 - {{ data.品名 }}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .pd-crumb { font-size: 13px; color: #64748b; margin: 10px 0; }
+        .pd-crumb a { color: #2563eb; text-decoration: none; }
+        .pd-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+        .pd-head h1 { font-size: 20px; margin: 0; }
+        .pd-cat { font-size: 13px; color: #94a3b8; }
+        /* 核心差距卡 */
+        .gap-cards { display: flex; gap: 12px; flex-wrap: wrap; margin: 14px 0; }
+        .gap-card { flex: 1; min-width: 150px; background: #f8fafc; border: 1px solid #e2e8f0;
+                    border-radius: 10px; padding: 12px 14px; text-align: center; }
+        .gap-card .gv { font-size: 20px; font-weight: 700; color: #1e3a8a; }
+        .gap-card .gv.red { color: #dc2626; }
+        .gap-card .gv.green { color: #059669; }
+        .gap-card .gt { font-size: 12px; color: #64748b; margin-top: 3px; }
+        /* 销量对比条 */
+        .sales-compare { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+                         padding: 16px; margin: 14px 0; }
+        .sales-compare h3 { margin: 0 0 12px; font-size: 15px; }
+        .sc-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+        .sc-label { width: 90px; font-size: 13px; color: #475569; text-align: right; }
+        .sc-bar-wrap { flex: 1; background: #f1f5f9; border-radius: 6px; height: 26px; position: relative; }
+        .sc-bar { height: 26px; border-radius: 6px; display: flex; align-items: center;
+                  padding: 0 8px; color: #fff; font-size: 13px; font-weight: 600;
+                  min-width: 34px; box-sizing: border-box; white-space: nowrap; }
+        .sc-bar.comp { background: #3b82f6; }
+        .sc-bar.own { background: #10b981; }
+        /* 左右对照 */
+        .pd-split { display: flex; gap: 16px; flex-wrap: wrap; margin: 14px 0; }
+        .pd-col { flex: 1; min-width: 340px; background: #fff; border: 1px solid #e2e8f0;
+                  border-radius: 12px; padding: 14px; }
+        .pd-col h3 { margin: 0 0 10px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+        .pd-col.own h3 { color: #059669; }
+        .pd-col.comp h3 { color: #2563eb; }
+        .pd-item { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f1f5f9;
+                   font-size: 13px; align-items: flex-start; }
+        .pd-item:last-child { border-bottom: none; }
+        .pd-item img { width: 46px; height: 46px; object-fit: cover; border-radius: 6px;
+                       border: 1px solid #e2e8f0; flex-shrink: 0; }
+        .pd-item .ph { width: 46px; height: 46px; border-radius: 6px; background: #f1f5f9;
+                       display: flex; align-items: center; justify-content: center;
+                       color: #cbd5e1; font-size: 11px; flex-shrink: 0; }
+        .pd-item .nm { font-weight: 600; color: #1e293b; margin-bottom: 3px; }
+        .pd-item .meta { color: #64748b; font-size: 12px; line-height: 1.6; }
+        .pd-item .meta b { color: #dc2626; }
+        .tag-cross { display: inline-block; background: #fee2e2; color: #991b1b;
+                     border-radius: 4px; padding: 0 6px; font-size: 11px; margin-left: 4px; }
+        .brand-chips { margin-bottom: 10px; }
+        .brand-chip { display: inline-block; background: #eff6ff; color: #1e40af;
+                      border-radius: 6px; padding: 2px 9px; font-size: 12px; margin: 2px; }
+        /* 规格缺口 */
+        .spec-gap { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px;
+                    padding: 12px 14px; margin: 14px 0; }
+        .spec-gap h4 { margin: 0 0 8px; color: #991b1b; font-size: 14px; }
+        .spec-gap .sg-item { display: inline-block; background: #fff; border: 1px solid #fecaca;
+                             color: #dc2626; border-radius: 6px; padding: 2px 9px;
+                             font-size: 12px; margin: 2px; }
+        .sub-note { font-size: 12px; color: #94a3b8; margin: 6px 0; }
+        .empty { color: #94a3b8; font-size: 13px; padding: 12px 0; }
+    </style>
+</head>
+<body>
+<div class="container">
+    {% set active = 'dashboard' %}
+    {% include "_nav.html" %}
+
+    <main>
+        <div class="pd-crumb">
+            <a href="/?shop={{ current_shop | urlencode }}">← 返回榜单</a>
+            &nbsp;/&nbsp; {{ data.品名 }}
+        </div>
+
+        {% if store_status %}
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:13px;">
+            🏪 各门店上架状态：
+            {% for st in store_status %}
+            {% if st.on_sale %}
+            <span style="background:#dcfce7;color:#166534;border-radius:6px;padding:2px 10px;margin:0 4px;display:inline-block;">✔ {{ st.name }} 在售</span>
+            {% else %}
+            <span style="background:#e0f2fe;color:#0369a1;border-radius:6px;padding:2px 10px;margin:0 4px;display:inline-block;">↥ {{ st.name }} 未上架</span>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="pd-head">
+            <h1>{{ data.品名 }}</h1>
+            {% if data.结论 == '机会品' %}<span class="badge badge-opp">机会品</span>
+            {% elif data.结论 == '防守品' %}<span class="badge badge-hot">防守品</span>
+            {% elif data.结论 == '领先品' %}<span class="badge badge-ok">领先品</span>
+            {% else %}<span class="badge">观察品</span>{% endif %}
+            <span class="pd-cat">类目：{{ data.类目 }} &nbsp;|&nbsp; 自家品牌：{{ data.自家品牌 }}</span>
+        </div>
+
+        <!-- 核心差距指标卡 -->
+        <div class="gap-cards">
+            <div class="gap-card">
+                <div class="gv">{{ data.竞品总月售 }}</div>
+                <div class="gt">竞品总月售（{{ data.竞品数 }} 条）</div>
+            </div>
+            <div class="gap-card">
+                <div class="gv">{{ data.自家月销合计 }}</div>
+                <div class="gt">自家月销合计</div>
+            </div>
+            <div class="gap-card">
+                <div class="gv {% if data.销量比 and data.销量比 > 1.5 %}red{% elif data.销量比 and data.销量比 < 1 %}green{% endif %}">
+                    {% if data.销量比 %}{{ data.销量比 }}x{% else %}-{% endif %}</div>
+                <div class="gt">销量比（竞品/自家）</div>
+            </div>
+            <div class="gap-card">
+                <div class="gv">{{ data.自家规格数 }} / {{ data.竞品|length and data.竞品数 }}</div>
+                <div class="gt">自家规格数 / 竞品条数</div>
+            </div>
+            <div class="gap-card">
+                <div class="gv">{{ data.在卖品牌|length }}</div>
+                <div class="gt">在卖品牌数</div>
+            </div>
+        </div>
+
+        <!-- 销量对比条 -->
+        <div class="sales-compare">
+            <h3>📊 销量对比</h3>
+            {% set maxs = [data.竞品总月售, data.自家月销合计, 1] | max %}
+            <div class="sc-row">
+                <span class="sc-label">竞品总月售</span>
+                <div class="sc-bar-wrap">
+                    <div class="sc-bar comp" style="width: {{ (data.竞品总月售 / maxs * 100) | round }}%">{{ data.竞品总月售 }}</div>
+                </div>
+            </div>
+            <div class="sc-row">
+                <span class="sc-label">自家月销</span>
+                <div class="sc-bar-wrap">
+                    <div class="sc-bar own" style="width: {{ (data.自家月销合计 / maxs * 100) | round }}%">{{ data.自家月销合计 }}</div>
+                </div>
+            </div>
+            <div class="sub-note">
+                {% if data.价格信号 %}💰 {{ data.价格信号 }} &nbsp;|&nbsp; {% endif %}
+                {% if data.竞品价格带[0] is not none %}竞品价格带 ¥{{ '%.2f'|format(data.竞品价格带[0]) }}-{{ '%.2f'|format(data.竞品价格带[1]) }}{% endif %}
+                {% if data.自家售价区间[0] is not none %} &nbsp;|&nbsp; 自家售价 ¥{{ '%.2f'|format(data.自家售价区间[0]) }}-{{ '%.2f'|format(data.自家售价区间[1]) }}{% endif %}
+            </div>
+        </div>
+
+        <!-- 规格缺口 -->
+        {% if data.规格缺口 %}
+        <div class="spec-gap">
+            <h4>⚠ 规格缺口：竞品有、自家没有（{{ data.规格缺口|length }} 个）</h4>
+            {% for s in data.规格缺口[:20] %}<span class="sg-item">{{ s }}</span>{% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- 左右对照：自家 vs 竞品 -->
+        <div class="pd-split">
+            <!-- 自家 -->
+            <div class="pd-col own">
+                <h3>🏠 自家（{{ data.自家SKU|length }} 个规格）</h3>
+                {% if data.自家SKU %}
+                    {% for s in data.自家SKU %}
+                    <div class="pd-item">
+                        {% if s.图片 %}<img src="{{ s.图片 | img }}" onerror="this.outerHTML='<div class=ph>无图</div>'">{% else %}<div class="ph">无图</div>{% endif %}
+                        <div>
+                            <div class="nm">{{ s.规格 or '（默认规格）' }}</div>
+                            <div class="meta">
+                                售价 <b>¥{{ s.售价 }}</b>
+                                {% if s.采购价 %} | 采购 ¥{{ s.采购价 }}{% endif %}
+                                | 月销 {{ s.月销 }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}<div class="empty">自家无该品 SKU</div>{% endif %}
+            </div>
+
+            <!-- 竞品 -->
+            <div class="pd-col comp">
+                <h3>🏪 竞品（{{ data.竞品数 }} 条）</h3>
+                {% if data.在卖品牌 %}
+                <div class="brand-chips">
+                    {% for b in data.在卖品牌 %}<span class="brand-chip">{{ b }}</span>{% endfor %}
+                </div>
+                {% endif %}
+                {% if data.竞品 %}
+                    {% for c in data.竞品 %}
+                    <div class="pd-item">
+                        <div style="flex:1;">
+                            <div class="nm">
+                                <a href="/comp_detail?shop={{ current_shop | urlencode }}&sku={{ c.竞品Sku_id | urlencode }}" style="color:#1e293b;text-decoration:none;">{{ c.竞品名 }}</a>
+                                {% if c.跨品牌 %}<span class="tag-cross">跨品牌</span>{% endif %}
+                            </div>
+                            <div class="meta">
+                                {% if c.品牌 and c.品牌 != '（无品牌）' %}{{ c.品牌 }} | {% endif %}
+                                月售 <b>{{ c.月售 }}</b>
+                                {% if c.到手价 %} | ¥{{ c.到手价 }}{% endif %}
+                                {% if c.规格 %} | {{ c.规格 }}{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}<div class="empty">暂无对应竞品</div>{% endif %}
+            </div>
+        </div>
+
+        <div class="sub-note">竞品名可点击进竞品详情；跨品牌=竞品品牌与自家不同（品牌力差距信号）</div>
+
+        <!-- AI 对齐建议（降级自独立页：对照结果的延伸） -->
+        <div class="sales-compare" style="margin-top:16px;">
+            <h3>💡 AI 对齐建议</h3>
+            {% if advice_rows %}
+            <table class="advice-tbl" style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead><tr style="background:#f8fafc;">
+                    <th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left;">竞品</th>
+                    <th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left;">竞品价/月售</th>
+                    <th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left;">自家售价/月销</th>
+                    <th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left;">价差率</th>
+                    <th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left;">建议</th>
+                </tr></thead>
+                <tbody>
+                {% for a in advice_rows %}
+                <tr>
+                    <td style="border:1px solid #e2e8f0;padding:6px 10px;">{{ a.竞品商品名 }}</td>
+                    <td style="border:1px solid #e2e8f0;padding:6px 10px;">¥{{ a.竞品价 }} / {{ a.竞品月售 }}</td>
+                    <td style="border:1px solid #e2e8f0;padding:6px 10px;">¥{{ a.自家售价 }} / {{ a.自家月销 }}</td>
+                    <td style="border:1px solid #e2e8f0;padding:6px 10px;">{{ a.价差率 }}</td>
+                    <td style="border:1px solid #e2e8f0;padding:6px 10px;color:#1d4ed8;">{{ a.建议 }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            <div class="sub-note">来自「工具 → 已对齐建议」生成的 output/已对齐建议.xlsx</div>
+            {% else %}
+            <div class="empty">该品暂无 AI 建议。可到「工具 → 已对齐建议」按店生成（生成后此处展示）。</div>
+            {% endif %}
+        </div>
+    </main>
+</div>
+</body>
+</html>

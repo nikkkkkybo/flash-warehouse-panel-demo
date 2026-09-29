@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>闪电仓选品工具 — 执行思维链路</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background:#fafafa; }
+  h1 { text-align:center; color:#2c3e50; margin-bottom:5px;}
+  .subtitle { text-align:center; color:#7f8c8d; font-size:13px; margin-bottom:20px;}
+  .chain { display:flex; flex-direction:column; align-items:center; }
+  .step { background:#fff; border:2px solid #34495e; border-radius:8px; padding:12px 20px; margin:8px 0; width:80%; text-align:center; position:relative; font-size:15px;}
+  .step.input { border-color:#27ae60; background:#eafaf1;}
+  .step.process { border-color:#2980b9; background:#ebf5fb;}
+  .step.decision { border-color:#f39c12; background:#fef9e7; border-style:dashed;}
+  .step.output { border-color:#8e44ad; background:#f4ecf7;}
+  .step.branch { border-color:#c0392b; background:#fdedec;}
+  .step b{ display:block; color:#2c3e50; margin-bottom:3px;}
+  .step .script { font-size:11px; color:#7f8c8d; margin-top:4px;}
+  .down { font-size:28px; color:#7f8c8d; margin:2px 0;}
+  .split { display:flex; justify-content:center; gap:40px; width:100%; margin:8px 0;}
+  .split-col { flex:1; max-width:42%; display:flex; flex-direction:column; align-items:center;}
+  .split-col .step { width:100%;}
+  .merge-label { background:#fff; border:1px dashed #7f8c8d; border-radius:4px; padding:4px 10px; font-size:12px; color:#7f8c8d; margin:4px 0;}
+  .loop-note { background:#fef9e7; border-left:4px solid #f39c12; padding:8px 12px; font-size:12px; margin:8px 0; width:80%; text-align:center;}
+  .legend { background:#fff; padding:10px; border-radius:4px; margin:15px 0; font-size:12px; text-align:center;}
+  .legend span{ display:inline-block; padding:3px 10px; margin:3px; border-radius:3px; color:#fff; font-size:12px;}
+  [contenteditable]:focus { outline:2px solid #e74c3c; background:#fffde7; }
+  .edit-tip { background:#fff3cd; border-left:4px solid #ffc107; padding:8px 12px; font-size:13px; margin:10px 0;}
+  .edit-tip b{color:#c0392b;}
+  hr { border:0; border-top:1px dashed #bbb; margin:25px 0;}
+</style>
+</head>
+<body>
+
+<h1>闪电仓选品工具 — 执行思维链路</h1>
+<div class="subtitle">系统从输入到输出怎么跑，数据怎么流，哪里人工介入，哪里自动</div>
+
+<div class="edit-tip">
+<b>编辑说明：</b>双击浏览器打开本文件，任意文字点一下可直接修改。看完在你认为"不对/要删/要改"的地方直接改文字，截图发我。
+</div>
+
+<div class="legend">
+<span style="background:#27ae60;">绿=输入</span>
+<span style="background:#2980b9;">蓝=自动处理</span>
+<span style="background:#f39c12;">橙=人工决策</span>
+<span style="background:#8e44ad;">紫=产出</span>
+<span style="background:#c0392b;">红=改进点/分支</span>
+</div>
+
+<div class="chain">
+
+<!-- 起点 -->
+<div class="step input" contenteditable="true">
+<b>输入：两份Excel导出表</b>
+竞品表（美团导出4832行）+ 自家表（门店导出8535行）
+</div>
+<div class="down">↓</div>
+
+<!-- 归一化 -->
+<div class="step process" contenteditable="true">
+<b>① 字段归一化（自动）</b>
+商品名清洗→抽取品牌/型号/规格/颜色档位→两表类目对齐
+<div class="script">normalize.py → 竞品_归一化后.xlsx / 自家_归一化后.xlsx</div>
+</div>
+<div class="down">↓</div>
+
+<!-- 分流：两个并行链路 -->
+<div class="merge-label">数据洗干净后，并行跑两条链路</div>
+
+<div class="split">
+  <div class="split-col">
+    <div class="step process" contenteditable="true" style="border-color:#2980b9;">
+      <b>②A 跨店对齐引擎（自动4层匹配）</b>
+      第1层条码→第2层类目+品牌+型号+规格→第3层弱组合→第4层文本+图片相似
+      <div class="script">align.py</div>
+    </div>
+    <div class="down">↓</div>
+    <div class="step output" contenteditable="true">
+      <b>产出：自动确认匹配30条</b>
+      （条码2+强组合28，置信度≥0.85）
+    </div>
+    <div class="down">↓</div>
+    <div class="step output" contenteditable="true" style="border-color:#f39c12;">
+      <b>产出：人工确认池266条</b>
+      （弱组合148+模糊118，置信度&lt;0.85）
+    </div>
+  </div>
+
+  <div class="split-col">
+    <div class="step process" contenteditable="true" style="border-color:#2980b9;">
+      <b>②B 竞品热销品发现（自动）</b>
+      月售文本解析→热度分排名→按类目Top20+全表Top100
+      <div class="script">hot_products.py</div>
+    </div>
+    <div class="down">↓</div>
+    <div class="step output" contenteditable="true">
+      <b>产出：热销品清单</b>
+      Top100 + 按类目Top20（1145行）
+    </div>
+  </div>
+</div>
+
+<div class="down">↓</div>
+
+<!-- 改进点：人工确认面板 -->
+<div class="step branch" contenteditable="true">
+<b>🔴 改进点：人工确认环节（当前不对，要重做）</b>
+当前：266条让你一个个找——不如不干<br>
+改成：左右对照面板（左固定竞品品，右查自家库按名称/类别/品牌搜）<br>
+找到对应→确认对齐→自动跑差异分析→入对齐库<br>
+找不到→标记"无对应品"→进【商品引进评估阶段】
+<div class="script">需补做：查询界面（Web或Excel插件）</div>
+</div>
+<div class="down">↓</div>
+
+<!-- 合流 -->
+<div class="merge-label">确认后的对齐库 + 热销品清单 → 合流</div>
+
+<div class="step process" contenteditable="true">
+<b>③ 差异打分（自动，对每个匹配组跑7维度）</b>
+价格（神价vs售价）/毛利/图（判有无）/标题/规格/活动/评价
+<div class="script">score_diff.py → 差异打分_汇总.xlsx</div>
+</div>
+<div class="down">↓</div>
+
+<!-- 决策分流 -->
+<div class="step decision" contenteditable="true">
+<b>④ 决策分流（自动判断）</b>
+有对应自家品且匹配成功？<br>
+是 → 走"优化现有"<br>
+否（找不到对应）→ 走"引进新品"
+</div>
+<div class="down">↓</div>
+
+<div class="split">
+  <div class="split-col">
+    <div class="step process" contenteditable="true">
+      <b>⑤A 优化现有建议（自动生成）</b>
+      同款但自家劣势→调价/补图/扩规格/换标题建议值
+      <div class="script">build_suggestions.py → 30条</div>
+    </div>
+    <div class="down">↓</div>
+    <div class="step decision" contenteditable="true">
+      <b>人工确认建议</b>
+      确认/修改/拒绝 → 确认的流转"待入库"
+      <div class="script">apply_suggestion_review.py</div>
+    </div>
+  </div>
+
+  <div class="split-col">
+    <div class="step branch" contenteditable="true">
+      <b>🔵 商品引进评估阶段（要独立+补强）</b>
+      缺失品（竞品热销但自家无）一次性产出：<br>
+      - 找货源（1688半自动：AI筛卖家供挑）❗未做<br>
+      - 找好图（主图/详情/卖点三类）❗当前只判有无<br>
+      - 换标题（基于品牌+型号+参数生成）<br>
+      - 换规格（列竞品有该补的档位）<br>
+      - 利润测算（与货源询价联动）❗依赖货源
+    </div>
+    <div class="down">↓</div>
+    <div class="step decision" contenteditable="true">
+      <b>人工确认引进决策</b>
+      引入/不引入 → 确认的流转"待入库"
+    </div>
+  </div>
+</div>
+
+<div class="down">↓</div>
+
+<div class="merge-label">两路确认结果合流</div>
+
+<div class="step process" contenteditable="true">
+<b>⑥ 入库表导出（自动，按模板填充）</b>
+按你提供的入库模板→字段映射→填充→缺失标"待补"
+<div class="script">export_to_template.py → 入库表_待导入.xlsx</div>
+</div>
+<div class="down">↓</div>
+
+<div class="step output" contenteditable="true">
+<b>产出：可入库Excel</b>
+人工拿去实际入库操作
+</div>
+<div class="down">↓</div>
+
+<!-- 闭环 -->
+<div class="step process" contenteditable="true">
+<b>⑦ 效果追踪（上架后N天触发）</b>
+决策记录→7/14/30天拉本店实际销量→对比预期→偏差大的进复盘库→反推权重调整
+<div class="script">record_decision.py / review_lookback.py / review_library.py</div>
+</div>
+
+<div class="down">↓</div>
+
+<div class="loop-note" contenteditable="true">
+🔄 闭环回流：复盘库的权重调整建议 → 人工确认生效 → 影响 ③差异打分 和 ⑤建议生成 的下次决策<br>
+<b>知识库沉淀：每次确认的对齐结果、决策依据都进库，越用越准</b>
+</div>
+
+<hr>
+
+<!-- 待你改 -->
+<div class="step branch" contenteditable="true" style="min-height:150px;">
+<b>📋 你看完在这里改（删/改/标注不对的地方）</b><br><br>
+1. 链路哪里不对：<br><br>
+2. 哪个环节多余：<br><br>
+3. 哪个环节缺失：<br><br>
+4. 人工确认面板要Web还是Excel插件：<br><br>
+5. 1688半自动（AI筛卖家供你挑）你接受吗：<br><br>
+6. "找好图"暂不做还是补数据后做：<br><br>
+</div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>闪电仓选品工具流程图（可编辑）</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; max-width: 1100px; margin: 0 auto; padding: 20px; background:#f5f5f5; }
+  h1 { text-align:center; color:#333; }
+  .tip { background:#fff3cd; border-left:4px solid #ffc107; padding:10px 15px; margin:15px 0; font-size:14px; }
+  .tip b{color:#c0392b;}
+  .stage { background:#fff; border:2px solid #2ecc71; border-radius:8px; padding:15px; margin:15px 0; position:relative; }
+  .stage h2 { margin-top:0; color:#2ecc71; font-size:18px; border-bottom:1px solid #eee; padding-bottom:8px;}
+  .stage .meta { font-size:12px; color:#666; margin-bottom:10px;}
+  .node { background:#f8f9fa; border:1px solid #dee2e6; border-radius:4px; padding:8px 12px; margin:6px 0; }
+  .branch { background:#e8f4f8; border:1px dashed #3498db; border-radius:4px; padding:8px 12px; margin:6px 0; }
+  .arrow { text-align:center; font-size:24px; color:#7f8c8d; margin:5px 0; }
+  .user-change { background:#fff5f5; border:2px solid #e74c3c; border-radius:8px; padding:15px; margin:15px 0; }
+  .user-change h2 { color:#e74c3c; }
+  .new-stage { background:#eaf6ff; border:2px solid #3498db; border-radius:8px; padding:15px; margin:15px 0; }
+  .new-stage h2 { color:#3498db; }
+  .legend { background:#fff; padding:10px; border-radius:4px; margin:15px 0; font-size:13px; }
+  .legend span{ display:inline-block; padding:2px 8px; margin-right:10px; border-radius:3px; color:#fff;}
+  [contenteditable]:focus { outline:2px solid #3498db; background:#fff; }
+  .confirm-list { background:#fff; border:2px dashed #9b59b6; border-radius:8px; padding:15px; margin:15px 0; }
+  .confirm-list h2 { color:#9b59b6; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  td, th { border:1px solid #ccc; padding:6px; }
+  th { background:#34495e; color:#fff; }
+</style>
+</head>
+<body>
+
+<h1>闪电仓选品工具 — 流程图（可编辑）</h1>
+
+<div class="tip">
+<b>编辑说明：</b><br>
+1. 用浏览器打开本文件即可查看流程图<br>
+2. <b>任意文字都能直接点击修改</b>（点一下文字就能编辑，改完点别处即保存到页面，截图发我）<br>
+3. 想改结构（加框/删框/改连线），用记事本或VSCode打开本.html改HTML代码<br>
+4. <b>红色框 = 你提的改进点，蓝色框 = 用户新提的阶段，绿色框 = 已完成可用</b><br>
+5. 看完在你认为"要删/要改/不对"的地方直接改文字，或底部"待你确认"区填写
+</div>
+
+<div class="legend">
+<b>图例：</b>
+<span style="background:#2ecc71;">绿色 已完成</span>
+<span style="background:#f39c12;">黄色 待人工</span>
+<span style="background:#e74c3c;">红色 改进点</span>
+<span style="background:#3498db;">蓝色 新阶段</span>
+</div>
+
+<!-- 阶段0 -->
+<div class="stage">
+<h2>阶段0：数据归一化（清洗+抽取+对齐）</h2>
+<div class="meta">状态：✅ 已完成 | 脚本：data_check.py / normalize.py | 产出：竞品_归一化后.xlsx / 自家_归一化后.xlsx / 类目映射表.xlsx</div>
+<div class="node" contenteditable="true">竞品表（4832行）→ 去促销词/括号，抽取品牌/型号/规格/颜色档位</div>
+<div class="node" contenteditable="true">自家表（8535行）→ 同上清洗，品牌字段从14.63%补全</div>
+<div class="branch" contenteditable="true">类目对齐：288个三级类目，131个两边一致，126个不一致已给建议映射（待你确认）</div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- 阶段1：对齐 -->
+<div class="stage">
+<h2>阶段1：跨店对齐引擎（4层匹配）</h2>
+<div class="meta">状态：✅ 已完成 | 脚本：align.py / apply_review.py | 核心：认出两家是不是同款</div>
+<div class="node" contenteditable="true">第1层 条码精确 → 2条（置信0.95，自动确认）</div>
+<div class="node" contenteditable="true">第2层 类目+品牌+型号+规格 → 28条（置信0.90，自动确认）</div>
+<div class="node" contenteditable="true">第3层 类目+品牌+型号（规格不同） → 148条（置信0.70，进人工池）</div>
+<div class="node" contenteditable="true">第4层 文本相似+图片相似 → 118条（置信&lt;0.6，进人工池）</div>
+<div class="branch" contenteditable="true">自动确认 30条 → 进入差异打分</div>
+<div class="branch" style="background:#fff3cd;border-color:#f39c12;" contenteditable="true">人工确认池 266条 → <b>当前实现：让你一个个找补（你要改，见下）</b></div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- 用户改进点1：人工确认环节 -->
+<div class="user-change">
+<h2>🔴 改进点1：人工确认环节（你提的核心改动）</h2>
+<div class="meta">状态：❌ 当前实现不对，按你的思路重做</div>
+
+<p><b>当前实现（要改掉）：</b></p>
+<div class="node" contenteditable="true">266条候选，让你一个个去自家表找对应品——<b>不如不干</b></div>
+
+<p><b>你的思路（要做成）：</b></p>
+<div class="node" contenteditable="true"><b>左右对照面板</b></div>
+<table>
+<tr><th>左侧（固定）</th><th>右侧（可查询）</th></tr>
+<tr><td>未明确对齐的竞品品<br>（商品名/类目/品牌/型号/图片/价格/月售）</td><td>查询页面 → 查自家商品库<br>查询方式：按名称搜 / 按类别筛选 / 按品牌筛</td></tr>
+</table>
+<div class="node" contenteditable="true">人工对照判断 → <b>找到对应</b>：确认对齐 → 自动跑差异分析 → 填入"知识库"（已对齐库）</div>
+<div class="node" contenteditable="true">人工对照判断 → <b>找不到对应</b>：标记"无对应品" → 进入【商品引进评估阶段】↓</div>
+
+<p><b>需要补做：</b></p>
+<div class="node" contenteditable="true">做一个查询界面（Web或本地Excel插件），左侧固定竞品品，右侧可搜自家库</div>
+<div class="node" contenteditable="true">确认后自动触发差异打分（复用score_diff.py）</div>
+<div class="node" contenteditable="true">确认的对齐结果回写到"对齐_汇总"（知识库）</div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- 阶段2：热销品 -->
+<div class="stage">
+<h2>阶段2：竞品热销品发现</h2>
+<div class="meta">状态：✅ 已完成 | 脚本：hot_products.py | 产出：热销品_按类目Top20.xlsx / 热销品_全表Top100.xlsx</div>
+<div class="node" contenteditable="true">月售文本解析："已售N"/"N人想买"/"已售100+" → 数值+类型（当模糊排名，不当精确值）</div>
+<div class="node" contenteditable="true">热度分 = 月售归一化（预留扩展位：评论数/差评关键词/上新频率）</div>
+<div class="node" contenteditable="true">TopN：按类目Top20（避免大品类霸榜）+ 全表Top100</div>
+<div class="branch" contenteditable="true">Top1：散装自攻钉 已售2000+</div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- 阶段3：差异打分 -->
+<div class="stage">
+<h2>阶段3：跨店差异打分（仅对齐成功的品）</h2>
+<div class="meta">状态：✅ 已完成（30条） | 脚本：score_diff.py | 产出：差异打分_汇总.xlsx</div>
+<div class="node" contenteditable="true">价格：竞品到手价（神价优先）vs 自家售价 → 价差/竞争力</div>
+<div class="node" contenteditable="true">毛利：自家采购价 → 当前毛利 + 按竞品价对标的毛利变化</div>
+<div class="node" contenteditable="true">图：仅判有无（自家只有"有没有"无图url，不能比图内容）❗局限</div>
+<div class="node" contenteditable="true">标题/规格/活动/评价 4维度对比</div>
+<div class="branch" contenteditable="true">输出综合建议：调价/补图/扩规格/优化标题</div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- 阶段4：建议清单 -->
+<div class="stage">
+<h2>阶段4：选品建议清单</h2>
+<div class="meta">状态：✅ 已完成 | 脚本：build_suggestions.py / apply_suggestion_review.py | 产出：选品建议清单.xlsx（818条）</div>
+<div class="node" contenteditable="true">A. 缺失品建议（788条）：竞品热销但自家无 → 引入</div>
+<div class="node" contenteditable="true">B. 竞争力弱建议（30条）：同款但自家劣势 → 调价/补图/扩规格</div>
+<div class="branch" contenteditable="true">所有建议默认"待人工确认"，确认后才流转"待入库"</div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- 新阶段：商品引进评估 -->
+<div class="new-stage">
+<h2>🔵 新阶段：商品引进评估（你新提，需补强）</h2>
+<div class="meta">状态：❌ 当前散落在阶段4，需独立成阶段并补强</div>
+
+<p><b>触发条件：</b></p>
+<div class="node" contenteditable="true">人工确认池里"找不到对应品"的 + 阶段4缺失品建议 → 进入此阶段</div>
+
+<p><b>此阶段一次性产出（你要的"一次性入库信息"）：</b></p>
+<div class="node" contenteditable="true">1. 找货源：1688先人工，或AI筛优质卖家供人工挑（起订量/交期/资质/价格梯度）</div>
+<div class="node" contenteditable="true">2. 找好图：主图/详情图/卖点图三类，各有标准（当前只能判有无，找图能力未做）❗</div>
+<div class="node" contenteditable="true">3. 换标题：基于品牌+型号+核心参数生成建议标题</div>
+<div class="node" contenteditable="true">4. 换规格：列出竞品有但该补的规格档位</div>
+<div class="node" contenteditable="true">5. 利润测算：与货源询价联动，算按竞品价对标的毛利（当前只算自家已有品，缺失品无采购价）❗</div>
+<div class="branch" contenteditable="true">产出"入库建议清单" → 人工确认 → 入库表导出</div>
+
+<p><b>需要补做：</b></p>
+<div class="node" contenteditable="true">- 1688找货源能力（当前无，需对接1688数据或人工半自动）</div>
+<div class="node" contenteditable="true">- "找好图"标准细化+图片获取能力（当前仅判有无）</div>
+<div class="node" contenteditable="true">- 缺失品的利润测算流程（依赖货源询价，需联动）</div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- 阶段5：入库导出 -->
+<div class="stage">
+<h2>阶段5：入库表导出</h2>
+<div class="meta">状态：✅ 通用版已完成 | 脚本：export_to_template.py | 待你提供入库模板后改yaml适配</div>
+<div class="node" contenteditable="true">通用模板15列（品身份证/商品名/品牌/型号/规格/类目/采购价/建议售价/竞品参考价/毛利预估/货源状态/图片状态/标题建议/状态/备注）</div>
+<div class="node" contenteditable="true">你给我入库模板 → 我改 template_field_mapping.yaml → 导出即用</div>
+<div class="branch" contenteditable="true">缺失字段标"待补"，不静默填空</div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- 阶段6：效果追踪 -->
+<div class="stage">
+<h2>阶段6：效果追踪闭环</h2>
+<div class="meta">状态：✅ 框架已完成（mock测试跑通）| 脚本：record_decision.py / review_lookback.py / review_library.py</div>
+<div class="node" contenteditable="true">决策记录：品身份证/当时排名/引入理由/预期排名</div>
+<div class="node" contenteditable="true">回看：上架后7/14/30天拉本店实际销量 vs 预期</div>
+<div class="node" contenteditable="true">复盘库：偏差大的进库 → 反推打分维度权重调整建议（需人工确认生效）</div>
+</div>
+
+<hr style="margin:30px 0;">
+
+<!-- 待确认 -->
+<div class="confirm-list">
+<h2>📋 待你确认（看完在这里填）</h2>
+
+<p><b>1. 人工确认环节改进（左右对照面板）：</b></p>
+<div class="node" contenteditable="true">你确认要做成左右对照面板吗？是/否：<br>
+若做，查询界面你倾向哪种形态？<br>
+□ Web页面（浏览器打开）<br>
+□ Excel插件/宏（在Excel里操作）<br>
+□ 命令行交互（最简单但体验差）<br>
+其他想法：</div>
+
+<p><b>2. 商品引进评估阶段独立：</b></p>
+<div class="node" contenteditable="true">确认把它从阶段4拆出独立成阶段？是/否：<br>
+1688找货源当前能力我做不到自动抓取，你能接受半自动吗（AI筛卖家供你挑）？是/否：</div>
+
+<p><b>3. "找好图"能力：</b></p>
+<div class="node" contenteditable="true">当前只能判"有没有图"。要能"找好图"需要：你自家商品库补图片url，或对接图片库。你倾向？<br>
+□ 暂不做，先判有无<br>
+□ 补自家图片url后做<br>
+□ 对接外部图片库（哪个？）</div>
+
+<p><b>4. 流程整体删减/修改：</b></p>
+<div class="node" contenteditable="true">你认为哪个阶段是多余的/不该这么做的？直接写：<br><br><br><br></div>
+
+<p><b>5. 其他你看到的要改的点：</b></p>
+<div class="node" contenteditable="true" style="min-height:80px;"><br><br><br></div>
+
+</div>
+
+</body>
+</html>

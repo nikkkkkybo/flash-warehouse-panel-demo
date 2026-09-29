@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人工确认 - 选品面板</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+    <!-- 顶部导航 -->
+    {% set active = 'confirm' %}
+    {% include "_nav.html" %}
+
+    <header class="main-header">
+        <h1>⚡ 人工确认（候选池处理 + 两层已对应查看）</h1>
+        <div class="stats">
+            <a class="stat-item stat-total" href="/confirm?shop={{ current_shop }}&status=all">总数 <strong>{{ total }}</strong></a>
+            <a class="stat-item stat-pending" href="/confirm?shop={{ current_shop }}&status=pending">待确认 <strong>{{ pending }}</strong></a>
+            <a class="stat-item stat-coarse" href="/confirm?shop={{ current_shop }}&view=spu">已粗对齐 <strong>{{ coarse }}</strong></a>
+            <a class="stat-item stat-confirmed" href="/confirm?shop={{ current_shop }}&view=sku">已对应 <strong>{{ confirmed }}</strong></a>
+            <a class="stat-item stat-nomatch" href="/confirm?shop={{ current_shop }}&status=nomatch">无对应 <strong>{{ no_match }}</strong></a>
+        </div>
+    </header>
+
+    <main>
+        <!-- 店铺切换器（第一项=全部店铺） -->
+        <div class="shop-switcher">
+            <a href="/confirm?view={{ view }}&status={{ status }}" class="shop-chip {% if not current_shop %}active{% endif %}">
+                🌐 全部店铺
+            </a>
+            {% for s in shops %}
+            <a href="/confirm?shop={{ s.name }}&view={{ view }}&status={{ status }}" class="shop-chip {% if s.name == current_shop %}active{% endif %}" title="已处理 {{ s.done }}/{{ s.total }}">
+                {{ s.name }}
+                <span class="chip-badge {% if s.pending == 0 %}chip-done{% endif %}">{{ s.pending }} 待确认</span>
+                <span class="chip-progress">({{ s.done }}/{{ s.total }})</span>
+            </a>
+            {% endfor %}
+        </div>
+
+        <!-- 层级与状态 Tab：已对齐 SPU / 已对齐 SKU / 待处理池（含状态筛选） -->
+        <div class="status-tabs">
+            <a href="/confirm?shop={{ current_shop }}&view=spu" class="status-tab {% if view == 'spu' %}active{% endif %}">已对齐 SPU（品）</a>
+            <a href="/confirm?shop={{ current_shop }}&view=sku" class="status-tab {% if view == 'sku' %}active{% endif %}">已对齐 SKU（品+规格）</a>
+            <a href="/confirm?shop={{ current_shop }}&view=pool&status=all" class="status-tab {% if view == 'pool' and status == 'all' %}active{% endif %}">待处理池 · 全部</a>
+            <a href="/confirm?shop={{ current_shop }}&view=pool&status=pending" class="status-tab {% if view == 'pool' and status == 'pending' %}active{% endif %}">待确认</a>
+            <a href="/confirm?shop={{ current_shop }}&view=pool&status=coarse" class="status-tab {% if view == 'pool' and status == 'coarse' %}active{% endif %}">已粗对齐</a>
+            <a href="/confirm?shop={{ current_shop }}&view=pool&status=confirmed" class="status-tab {% if view == 'pool' and status == 'confirmed' %}active{% endif %}">已对应</a>
+            <a href="/confirm?shop={{ current_shop }}&view=pool&status=nomatch" class="status-tab {% if view == 'pool' and status == 'nomatch' %}active{% endif %}">无对应</a>
+        </div>
+
+        {% if view == 'spu' %}
+        <!-- SPU 层已粗对齐 -->
+        <div class="list-header">
+            <h2>已对齐 SPU（品已对应，规格待补）<span class="page-info">共 {{ spu_total }} 条（显示前100）</span></h2>
+            {% if current_shop %}<div class="sub">当前店铺：{{ current_shop }}</div>
+            {% else %}<div class="sub">当前范围：全部店铺（{{ shops|length }} 家）</div>{% endif %}
+        </div>
+        {% if spu_rows %}
+        <table class="candidate-table">
+            <thead><tr>
+                <th class="col-comp-name">竞品商品</th><th class="col-own-name">已对应自家品</th>
+                <th class="col-cat">确认来源</th><th class="col-action">操作</th>
+            </tr></thead>
+            <tbody>
+                {% for r in spu_rows %}
+                <tr>
+                    <td class="col-comp-name">{{ r.竞品商品名 }}</td>
+                    <td class="col-own-name"><b>{{ r.自家品名 }}</b></td>
+                    <td class="col-cat">{{ r.竞店名称 }} · {{ r.确认来源 }}</td>
+                    <td class="col-action"><a href="/browse?q={{ r.竞品商品名 }}" class="btn btn-sm btn-green">去补规格</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-tip">暂无已粗对齐品对。</div>
+        {% endif %}
+
+        {% elif view == 'sku' %}
+        <!-- SKU 层已对应 -->
+        <div class="list-header">
+            <h2>已对齐 SKU（品+规格）<span class="page-info">共 {{ sku_total }} 条（显示前100）</span></h2>
+            {% if current_shop %}<div class="sub">当前店铺：{{ current_shop }}</div>
+            {% else %}<div class="sub">当前范围：全部店铺（{{ shops|length }} 家）</div>{% endif %}
+        </div>
+        {% if sku_rows %}
+        <table class="candidate-table">
+            <thead><tr>
+                <th class="col-comp-name">竞品商品</th><th class="col-own-name">已对应自家品</th>
+                <th class="col-cat">匹配层</th><th class="col-action">操作</th>
+            </tr></thead>
+            <tbody>
+                {% for r in sku_rows %}
+                <tr>
+                    <td class="col-comp-name">{{ r.竞品商品名 }}</td>
+                    <td class="col-own-name"><b>{{ r.自家商品名 }}</b></td>
+                    <td class="col-cat">第{{ r.匹配层 }}层 · {{ r.竞店名称 }}</td>
+                    <td class="col-action"><a href="/comp_detail?shop={{ r.竞店名称 }}&sku={{ r.竞品Sku_id }}" class="btn btn-sm btn-blue">查看详情</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-tip">暂无已对应品对。</div>
+        {% endif %}
+
+        {% else %}
+        <!-- 待处理池 -->
+        {% if status in ('all', 'pending') %}
+        <div class="run-bar" style="margin:8px 0;">
+            <button class="btn" onclick="skipLowValue()">⏭ 跳过低价值候选（月售&lt;10，标为无对应）</button>
+            <span id="skipStatus" style="font-size:12px;color:#64748b;"></span>
+        </div>
+        {% endif %}
+
+        <!-- 排序切换：置信度 / 销量 -->
+        <div class="run-bar" style="margin:8px 0;display:flex;gap:8px;align-items:center;">
+            <span style="font-size:13px;color:#475569;">排序：</span>
+            <a href="/confirm?shop={{ current_shop }}&view={{ view }}&status={{ status }}&sort=conf"
+               class="btn btn-sm {% if sort == 'conf' %}btn-blue{% else %}btn-gray{% endif %}" style="text-decoration:none;">按置信度降序（先做高置信）</a>
+            <a href="/confirm?shop={{ current_shop }}&view={{ view }}&status={{ status }}&sort=sales"
+               class="btn btn-sm {% if sort == 'sales' %}btn-blue{% else %}btn-gray{% endif %}" style="text-decoration:none;">按销量降序（价值优先）</a>
+        </div>
+
+        <div class="list-header">
+            <h2>
+                {% if status == 'pending' %}待确认{% elif status == 'coarse' %}已粗对齐（品已确认，规格待补）{% elif status == 'confirmed' %}已对应（品+规格）{% elif status == 'nomatch' %}无对应{% else %}全部{% endif %}候选列表
+                <span class="page-info">第 {{ page }} / {{ total_pages }} 页（{{ total }} 条）</span>
+            </h2>
+            {% if current_shop %}<div class="sub">当前店铺：{{ current_shop }}</div>
+            {% else %}<div class="sub">当前范围：全部店铺（{{ shops|length }} 家）</div>{% endif %}
+        </div>
+
+        {% if not items %}
+        <div class="empty-tip">
+            {% if total == 0 %}
+            暂无候选数据。请先到「导入新表」页上传竞店 Excel，系统将自动完成入库与对齐。
+            {% else %}
+            当前筛选条件下没有条目。
+            {% endif %}
+        </div>
+        {% else %}
+        <table class="candidate-table">
+            <thead>
+                <tr>
+                    <th class="col-idx">#</th>
+                    <th class="col-comp-name">竞品商品名</th>
+                    <th class="col-brand">竞品品牌</th>
+                    <th class="col-cat">竞品类目</th>
+                    <th class="col-own-name">候选自家商品名</th>
+                    <th class="col-layer">匹配层</th>
+                    <th class="col-conf">置信度</th>
+                    <th class="col-status">状态</th>
+                    <th class="col-action">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr class="{{ item.status_class }}">
+                    <td class="col-idx">{{ item.idx }}</td>
+                    <td class="col-comp-name" title="{{ item.竞品商品名 }}">{{ item.竞品商品名 }}</td>
+                    <td class="col-brand">{{ item.竞品品牌 }}</td>
+                    <td class="col-cat">{{ item.竞品类目 }}</td>
+                    <td class="col-own-name" title="{{ item.自家商品名 }}">{{ item.自家商品名 }}</td>
+                    <td class="col-layer">{% if item.匹配层|string|int > 0 %}第{{ item.匹配层 }}层{% else %}{{ item.匹配层 }}{% endif %}</td>
+                    <td class="col-conf">{{ item.置信度 }}</td>
+                    <td class="col-status"><span class="badge">{{ item.status_text }}</span></td>
+                    <td class="col-action"><a href="/item/{{ item.idx }}?shop={{ current_shop }}" class="btn btn-sm">查看对照</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        <div class="pagination">
+            {% if page > 1 %}
+            <a href="/confirm?page={{ page - 1 }}&shop={{ current_shop }}&view=pool&status={{ status }}" class="btn">← 上一页</a>
+            {% endif %}
+            <span class="page-info">{{ page }} / {{ total_pages }}</span>
+            {% if page < total_pages %}
+            <a href="/confirm?page={{ page + 1 }}&shop={{ current_shop }}&view=pool&status={{ status }}" class="btn">下一页 →</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </main>
+</div>
+
+<!-- 学习管理区 -->
+<div class="container" style="margin-top:18px;">
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;">
+        <div style="font-weight:700;font-size:14px;margin-bottom:6px;">📚 学习管理（确认反哺，越用越准）</div>
+        <div style="color:#64748b;font-size:12px;margin-bottom:10px;">
+            每次确认都会记入学习样本与关键词库；品牌补全/同义词启用后重跑对齐生效。
+        </div>
+        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+            <span id="learnStat" style="font-size:13px;color:#475569;"></span>
+            <button class="btn btn-sm" onclick="learnExtract()">✨ 提炼同义词（大模型）</button>
+        </div>
+        <div id="learnBody" style="font-size:13px;margin-top:8px;"></div>
+    </div>
+</div>
+<script>
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// 跳过低价值候选（月售<10，标为无对应）
+function skipLowValue() {
+    const params = new URLSearchParams(location.search);
+    const shop = params.get('shop') || '';
+    if (!confirm('将把当前范围内「月售低于10」的待确认候选标记为无对应（备注：低价值跳过）。\n确定跳过？')) return;
+    const st = document.getElementById('skipStatus');
+    st.textContent = '处理中...';
+    fetch('/api/pending_skip', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shop: shop, threshold: 10})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        st.textContent = '';
+        alert(d.ok ? d.msg : d.msg);
+        if (d.ok) window.location.reload();
+    })
+    .catch(function(e){ st.textContent = ''; alert('请求出错: ' + e.message); });
+}
+
+// ============ 学习管理 ============
+function loadLearn() {
+    fetch('/api/learn/status')
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+            if (!d.ok) return;
+            const s = d.status;
+            document.getElementById('learnStat').textContent =
+                '学习样本 ' + s.samples + ' 笔 | 待启用同义词 ' + s.pending_synonyms +
+                ' 个 | 待启用品牌补全 ' + s.pending_brand + ' 条 | 关键词库 ' + s.keywords +
+                ' 词 / 覆盖 ' + s.keyword_groups + ' 品组';
+            let html = '';
+            if (s.synonyms && s.synonyms.length) {
+                html += '<div style="font-weight:600;margin:8px 0 4px;">待启用同义词（启用后重跑归一化生效）：</div>';
+                s.synonyms.forEach(function(p) {
+                    html += '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:4px;">';
+                    html += '<span style="flex:1;">' + escapeHtml(p.variant) + ' → <b>' + escapeHtml(p.standard) + '</b></span>';
+                    html += '<button class="btn btn-sm" onclick="learnSyn(\'' + escapeHtml(p.variant) + '\',\'' + escapeHtml(p.standard) + '\',true)">启用</button>';
+                    html += '<button class="btn btn-sm" onclick="learnSyn(\'' + escapeHtml(p.variant) + '\',\'' + escapeHtml(p.standard) + '\',false)">忽略</button>';
+                    html += '</div>';
+                });
+            }
+            if (s.brand_fills && s.brand_fills.length) {
+                html += '<div style="font-weight:600;margin:8px 0 4px;">待启用品牌补全（启用后重跑对齐生效）：</div>';
+                s.brand_fills.slice(0, 10).forEach(function(b) {
+                    html += '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:4px;">';
+                    html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(b.sku) + '">' + escapeHtml(b.sku) + ' → ' + escapeHtml(b.品牌) + (b.型号 ? '/' + escapeHtml(b.型号) : '') + '（' + escapeHtml(b.店) + '）</span>';
+                    html += '<button class="btn btn-sm" onclick="learnBrand(\'' + escapeHtml(b.sku) + '\',true)">启用</button>';
+                    html += '<button class="btn btn-sm" onclick="learnBrand(\'' + escapeHtml(b.sku) + '\',false)">忽略</button>';
+                    html += '</div>';
+                });
+                if (s.brand_fills.length > 10) html += '<div style="color:#94a3b8;">…共 ' + s.brand_fills.length + ' 条</div>';
+            }
+            document.getElementById('learnBody').innerHTML = html || '<div style="color:#94a3b8;">暂无待启用项。关键词库为空时，可运行 scripts/build_keyword_lib.py 生成种子词库。</div>';
+        })
+        .catch(function(){});
+}
+
+function learnExtract() {
+    if (!confirm('调用大模型从学习样本提炼同义词（预计几毛到几元）？\n提炼结果需人工启用后才生效。')) return;
+    fetch('/api/learn/extract', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})
+        .then(function(r){ return r.json(); })
+        .then(function(d) { alert(d.ok ? d.msg : d.msg); if (d.ok) loadLearn(); })
+        .catch(function(e){ alert('提炼失败: ' + e.message); });
+}
+
+function learnSyn(variant, standard, enable) {
+    fetch('/api/learn/synonym', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({variant: variant, standard: standard, enable: enable})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) { if (d.ok) loadLearn(); })
+    .catch(function(){});
+}
+
+function learnBrand(sku, enable) {
+    fetch('/api/learn/brand', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({sku: sku, enable: enable})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) { if (d.ok) loadLearn(); })
+    .catch(function(){});
+}
+window.onload = loadLearn;
+</script>
+</body>
+</html>

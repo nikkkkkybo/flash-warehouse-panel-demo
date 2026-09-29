@@ -1,0 +1,38 @@
+<style>
+.top-nav { display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+           background: #fff; border-bottom: 1px solid #e2e8f0; padding: 0 18px;
+           height: 52px; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+.nav-brand { font-weight: 700; color: #2563eb; margin-right: 16px; font-size: 15px; white-space: nowrap; }
+.top-nav .nav-link { color: #475569; text-decoration: none; font-size: 14px;
+                     padding: 7px 14px; border-radius: 6px; white-space: nowrap; }
+.top-nav .nav-link:hover { background: #eff6ff; color: #2563eb; }
+.top-nav .nav-link.active { background: #2563eb; color: #fff; }
+.nav-tip { font-size: 12px; color: #94a3b8; margin-left: auto; white-space: nowrap; }
+.health-lamp { font-size: 12px; text-decoration: none; white-space: nowrap; margin-left: 10px; }
+.health-lamp.red { color: #b91c1c; font-weight: 600; }
+.health-lamp.yellow { color: #b45309; }
+.health-lamp.green { color: #059669; }
+.health-bar { padding: 7px 18px; font-size: 12.5px; line-height: 1.6; border-bottom: 1px solid #fecaca;
+              background: #fef2f2; color: #991b1b; }
+.health-bar.warn { background: #fffbeb; border-bottom-color: #fde68a; color: #92400e; }
+.health-bar a { color: inherit; text-decoration: underline; }
+</style>
+<nav class="top-nav">
+    <span class="nav-brand">⚡ 闪电仓选品</span>
+    <a href="/" class="nav-link{% if active == 'dashboard' %} active{% endif %}">① 看建议</a>
+    <a href="/browse" class="nav-link{% if active == 'browse' %} active{% endif %}">② 定对应</a>
+    <a href="/analysis" class="nav-link{% if active == 'analysis' %} active{% endif %}">③ 拿结论</a>
+    <a href="/tools" class="nav-link{% if active == 'tools' %} active{% endif %}">④ 工具</a>
+    {% if health_bar %}
+    <a href="/tools#health" class="health-lamp {{ health_bar.verdict }}" title="每日体检：数据是否新鲜、备份是否在跑、口径是否完整">
+        ● {{ '体检 红灯 ' ~ health_bar.bad if health_bar.bad else ('体检 黄灯 ' ~ health_bar.warn if health_bar.warn else '体检 正常') }}</a>
+    {% endif %}
+    <span class="nav-tip">看建议 → 定对应 → 拿结论 · 工具喂料</span>
+</nav>
+{% if health_bar and (health_bar.bad or health_bar.warn) %}
+<div class="health-bar{{ ' warn' if not health_bar.bad }}">
+    {% if health_bar.bad %}🔴 有 {{ health_bar.bad }} 项需要今天处理：{% else %}🟡 有 {{ health_bar.warn }} 项建议本周处理：{% endif %}
+    {% for t in health_bar.titles %}<a href="/tools#health">{{ t }}</a>{{ '；' if not loop.last }}{% endfor %}
+    —— <a href="/tools#health">去工具页看逐项处置</a>（体检时间 {{ health_bar.at }}）
+</div>
+{% endif %}

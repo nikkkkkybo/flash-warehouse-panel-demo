@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>引进候选池 - 选品面板</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+.pool-header{background:#fff;border-radius:12px;padding:18px 24px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.pool-header h1{margin:0 0 4px;font-size:20px;}
+.pool-header .sub{color:#64748b;font-size:13px;}
+.pool-tabs{display:flex;gap:8px;margin:14px 0 4px;flex-wrap:wrap;}
+.pool-tab{padding:7px 16px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;cursor:pointer;font-size:13px;color:#475569;text-decoration:none;display:inline-block;}
+.pool-tab.active{background:#2563eb;color:#fff;border-color:#2563eb;}
+.pool-tab:hover:not(.active){background:#eff6ff;color:#2563eb;}
+.sec-title{display:flex;align-items:center;gap:10px;margin:18px 0 8px;font-size:16px;font-weight:700;}
+.sec-title .cnt{color:#64748b;font-weight:400;font-size:13px;}
+/* 绑定组卡片 */
+.grp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:12px;}
+.grp-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.04);}
+.grp-card .grp-name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.grp-card .grp-meta{color:#94a3b8;font-size:11px;margin-top:2px;}
+.grp-members{display:flex;flex-direction:column;gap:8px;margin-top:10px;}
+.grp-member{display:flex;gap:10px;align-items:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;}
+.grp-member img{width:46px;height:46px;object-fit:contain;border-radius:6px;background:#fff;border:1px solid #e2e8f0;flex-shrink:0;}
+.grp-member .gm-info{flex:1;min-width:0;}
+.grp-member .gm-name{font-size:13px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.grp-member .gm-meta{font-size:11px;color:#64748b;margin-top:2px;}
+.grp-member .gm-meta b{color:#dc2626;}
+.grp-member .gm-x{color:#94a3b8;cursor:pointer;font-size:14px;padding:2px 6px;border-radius:6px;flex-shrink:0;}
+.grp-member .gm-x:hover{background:#fee2e2;color:#b91c1c;}
+.grp-own{margin-top:8px;font-size:12px;background:#ecfdf5;border:1px solid #bbf7d0;color:#065f46;border-radius:8px;padding:6px 10px;}
+.grp-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center;}
+/* 条目表 */
+.pool-table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.pool-table th{background:#f8fafc;padding:10px 12px;text-align:left;font-size:13px;color:#475569;white-space:nowrap;}
+.pool-table td{padding:8px 12px;border-top:1px solid #f1f5f9;font-size:13px;vertical-align:middle;}
+.pool-table tr:hover{background:#f8fafc;}
+.pool-thumb{width:44px;height:44px;object-fit:contain;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;}
+.grp-chip{display:inline-block;background:#eff6ff;color:#1d4ed8;border-radius:10px;padding:2px 8px;font-size:11px;font-weight:600;cursor:pointer;}
+/* 推荐弹窗 */
+.modal-mask{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:200;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;}
+.modal-mask.show{display:flex;}
+.modal{background:#fff;border-radius:14px;max-width:960px;width:100%;padding:20px 24px;box-shadow:0 10px 40px rgba(0,0,0,.2);}
+.modal h3{margin:0 0 4px;font-size:16px;}
+.sug-row{display:flex;gap:12px;align-items:stretch;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-top:10px;background:#fff;}
+.sug-cmp{display:flex;gap:10px;flex:1;}
+.sug-side{flex:1;min-width:0;text-align:center;}
+.sug-side .tag{font-size:11px;color:#64748b;margin-bottom:4px;}
+.sug-side img{width:90px;height:90px;object-fit:contain;border-radius:8px;border:1px solid #e2e8f0;background:#fff;}
+.sug-side .nm{font-size:12px;margin-top:4px;color:#1e293b;line-height:1.4;max-height:50px;overflow:hidden;}
+.sug-side .pr{color:#dc2626;font-weight:700;font-size:13px;}
+.sug-act{display:flex;flex-direction:column;gap:6px;justify-content:center;min-width:120px;}
+.layer-badge{display:inline-block;background:#f1f5f9;color:#475569;border-radius:8px;padding:1px 7px;font-size:11px;font-weight:600;}
+.layer-l1{background:#dcfce7;color:#15803d;}
+.layer-l2,.layer-l3{background:#dbeafe;color:#1d4ed8;}
+.llm-yes{color:#15803d;font-weight:700;}
+.llm-no{color:#b91c1c;font-weight:700;}
+.llm-unsure{color:#d97706;font-weight:700;}
+.own-search-box{display:flex;gap:6px;margin-top:8px;}
+.own-search-box input{flex:1;padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;}
+.own-results{margin-top:6px;max-height:180px;overflow-y:auto;}
+.own-r{padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;margin-top:4px;font-size:12px;cursor:pointer;}
+.own-r:hover{background:#eff6ff;}
+.own-r.selected{border-color:#10b981;background:#ecfdf5;}
+/* 关联弹窗：详情预览 */
+.own-preview{margin-top:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;display:none;}
+.own-preview.show{display:block;}
+.own-preview .op-head{display:flex;gap:10px;align-items:flex-start;}
+.own-preview .op-img{width:60px;height:60px;border-radius:6px;object-fit:contain;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;}
+.own-preview .op-img-ph{width:60px;height:60px;border-radius:6px;background:#fff;border:1px solid #e2e8f0;display:flex;align-items:center;justify-content:center;color:#cbd5e1;font-size:10px;flex-shrink:0;}
+.own-preview .op-name{font-size:13px;font-weight:600;color:#1e293b;}
+.own-preview .op-meta{font-size:11px;color:#64748b;margin-top:2px;line-height:1.6;}
+.own-preview .op-meta b{color:#059669;}
+.own-sku-list{margin-top:8px;max-height:180px;overflow-y:auto;}
+.own-sku-item{display:flex;gap:8px;padding:4px 6px;border-bottom:1px solid #f1f5f9;font-size:11px;align-items:center;}
+.own-sku-item:last-child{border-bottom:none;}
+.own-sku-item .sp{flex:1;color:#334155;}
+.own-sku-item .sp-price{color:#dc2626;font-weight:600;}
+.empty-tip2{padding:28px;text-align:center;color:#94a3b8;background:#fff;border:1px dashed #cbd5e1;border-radius:10px;margin-top:10px;font-size:13px;}
+/* 高置信候选待确认 */
+.pd-wrap{display:flex;flex-direction:column;gap:8px;}
+.pd-row{display:flex;gap:14px;align-items:center;background:#fff;border:1px solid #dbeafe;border-radius:10px;padding:10px 14px;box-shadow:0 1px 4px rgba(37,99,235,.06);}
+.pd-side{flex:1;min-width:0;display:flex;gap:10px;align-items:center;}
+.pd-side img{width:52px;height:52px;object-fit:contain;border-radius:6px;border:1px solid #e2e8f0;background:#fff;flex-shrink:0;}
+.pd-info{min-width:0;}
+.pd-nm{font-size:13px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pd-meta{font-size:11px;color:#64748b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pd-meta b{color:#dc2626;}
+.pd-mid{width:172px;flex-shrink:0;text-align:center;}
+.pd-reason{font-size:11px;color:#94a3b8;margin:4px 0;}
+.pd-btns{display:flex;gap:6px;justify-content:center;}
+/* SKU 展开行（复用 dashboard 风格） */
+.pool-sku-row{display:none;background:#f8fafc;}
+.pool-sku-row.open{display:table-row;}
+.pool-sku-wrap{padding:10px 14px;display:flex;flex-direction:column;gap:4px;}
+.pool-sku-item{display:flex;gap:10px;padding:5px 8px;background:#fff;border:1px solid #eef2f6;border-radius:6px;font-size:12px;align-items:center;}
+.pool-sku-item .sp{flex:1;color:#334155;}
+.pool-sku-item .sp-sales{color:#64748b;}
+.pool-sku-item .sp-price{color:#dc2626;font-weight:600;}
+.pool-row-click{cursor:pointer;}
+.pool-row-click:hover{background:#f8fafc;}
+.pool-expand-arrow{color:#94a3b8;font-size:12px;transition:transform 0.15s;display:inline-block;}
+.pool-expand-arrow.open{transform:rotate(90deg);}
+/* 绑定组成员 SKU 折叠 */
+.gm-sku-toggle{font-size:11px;color:#2563eb;cursor:pointer;margin-top:2px;display:inline-block;}
+.gm-sku-toggle:hover{text-decoration:underline;}
+.gm-sku-list{display:none;margin-top:6px;padding:6px 8px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;}
+.gm-sku-list.open{display:block;}
+.gm-sku-item{display:flex;gap:8px;padding:3px 0;font-size:11px;border-bottom:1px solid #f1f5f9;align-items:center;}
+.gm-sku-item:last-child{border-bottom:none;}
+.gm-sku-item .sp{flex:1;color:#334155;}.gm-sku-item .sp-price{color:#dc2626;font-weight:600;}
+    </style>
+</head>
+<body>
+<div class="container">
+    {% set active = 'browse' %}
+    {% include "_nav.html" %}
+
+    <header class="pool-header">
+        <h1>📦 引进候选池 <span style="font-size:12px;color:#94a3b8;font-weight:400;">总库 → 分区/店铺 两级视图 · 跨店同品绑定</span></h1>
+        <div class="sub">引进候选一键入池 → 跨店找同品绑成组（全面分析 + 辅助商品对应）。绑定采用六层级联：条码 → 品牌+名称 → 名称相似 → 语义 → LLM核实。</div>
+        <div class="stats">
+            <span class="stat-item">总条目 <strong>{{ data.stats.total }}</strong></span>
+            <span class="stat-item">绑定组 <strong>{{ data.stats.groups }}</strong></span>
+            <span class="stat-item">覆盖店铺 <strong>{{ data.stats.shops }}</strong></span>
+            <span class="stat-item">未绑定 <strong>{{ data.stats.ungrouped }}</strong></span>
+            <span class="stat-item">已关联自家品 <strong>{{ data.stats.linked_own }}</strong></span>
+            {% if data.stats.pending %}<span class="stat-item">待确认 <strong style="color:#d97706;">{{ data.stats.pending }}</strong></span>{% endif %}
+            <span class="stat-item" style="margin-left:auto;">
+                <a href="/api/pool/export" class="btn btn-sm" style="text-decoration:none;">📥 导出 Excel</a>
+            </span>
+        </div>
+    </header>
+
+    <main>
+        <!-- ============ 高置信候选（入池自动推荐） ============ -->
+        {% if data.pending %}
+        <div class="sec-title" style="margin-top:0;">⚡ 高置信候选 {{ data.pending | length }} 对
+            <span class="cnt">入池时自动发现 · 看图确认即绑定</span>
+            <span style="margin-left:auto;">
+                <button class="btn btn-green" onclick="confirmAllPending(this)">🔗 全部绑定</button>
+            </span>
+        </div>
+        <div class="pd-wrap">
+            {% for p in data.pending %}
+            <div class="pd-row" id="pd-{{ p.a.eid }}-{{ p.b.eid }}">
+                <div class="pd-side">
+                    {% if p.a.图片 %}<img src="{{ p.a.图片 | img }}" loading="lazy" onerror="this.style.display='none';">
+                    {% else %}<span style="width:52px;height:52px;display:inline-block;border-radius:6px;background:#f8fafc;font-size:10px;color:#cbd5e1;text-align:center;line-height:52px;flex-shrink:0;">无图</span>{% endif %}
+                    <div class="pd-info">
+                        <div class="pd-nm" title="{{ p.a.品名 }}">{{ p.a.品名 }}</div>
+                        <div class="pd-meta">{{ p.a.shop }} · <b>¥{{ p.a.价格 }}</b>{% if p.a.原价 and p.a.原价 != p.a.价格 %} <del class="price-orig">¥{{ p.a.原价 }}</del>{% endif %}{% if p.a.折扣 %} <span class="zk-badge">{{ p.a.折扣 }}</span>{% endif %} · 月售 {{ p.a.月售 }}</div>
+                    </div>
+                </div>
+                <div class="pd-mid">
+                    <span class="layer-badge layer-l2">{{ p.layer }} {{ (p.score * 100) | round | int }}%</span>
+                    <div class="pd-reason">{{ p.reason }}</div>
+                    <div class="pd-btns">
+                        <button class="btn btn-sm btn-green" onclick="confirmPending('{{ p.a.eid }}','{{ p.b.eid }}',this)">🔗 绑定</button>
+                        <button class="btn btn-sm btn-gray" onclick="dismissPending('{{ p.a.eid }}','{{ p.b.eid }}',this)" title="不是同品，不再提示">✕</button>
+                    </div>
+                </div>
+                <div class="pd-side">
+                    {% if p.b.图片 %}<img src="{{ p.b.图片 | img }}" loading="lazy" onerror="this.style.display='none';">
+                    {% else %}<span style="width:52px;height:52px;display:inline-block;border-radius:6px;background:#f8fafc;font-size:10px;color:#cbd5e1;text-align:center;line-height:52px;flex-shrink:0;">无图</span>{% endif %}
+                    <div class="pd-info">
+                        <div class="pd-nm" title="{{ p.b.品名 }}">{{ p.b.品名 }}</div>
+                        <div class="pd-meta">{{ p.b.shop }} · <b>¥{{ p.b.价格 }}</b>{% if p.b.原价 and p.b.原价 != p.b.价格 %} <del class="price-orig">¥{{ p.b.原价 }}</del>{% endif %}{% if p.b.折扣 %} <span class="zk-badge">{{ p.b.折扣 }}</span>{% endif %} · 月售 {{ p.b.月售 }}</div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div style="height:18px;"></div>
+        {% endif %}
+        <!-- ============ 绑定组 ============ -->
+        <div class="sec-title">🔗 绑定组（跨店同品）<span class="cnt">同品绑在一起：价格/销量/规格横比，可关联自家品辅助对应</span></div>
+        {% if data.groups %}
+        <div class="grp-grid">
+            {% for g in data.groups %}
+            <div class="grp-card" id="grp-{{ g.gid }}">
+                <div class="grp-name">
+                    <span>{{ g.名称 }}</span>
+                    <span class="layer-badge">{{ g.members | length }}店</span>
+                </div>
+                <div class="grp-meta">创建 {{ g.创建时间 }} · {{ g.gid }}</div>
+                {% if g.own_gid %}
+                <div class="grp-own">🏠 已关联自家品：{{ g.own_name or g.own_gid }}
+                    <a href="javascript:void(0)" onclick="linkOwnClear('{{ g.gid }}')" style="color:#94a3b8;margin-left:6px;" title="解除关联">✕</a>
+                </div>
+                {% endif %}
+                <div class="grp-members">
+                    {% for m in g.members %}
+                    <div class="grp-member">
+                        {% if m.图片 %}<img src="{{ m.图片 | img }}" loading="lazy" onerror="this.style.display='none';">
+                        {% else %}<span style="width:46px;height:46px;display:inline-block;border-radius:6px;background:#f8fafc;font-size:10px;color:#cbd5e1;text-align:center;line-height:46px;">无图</span>{% endif %}
+                        <div class="gm-info">
+                            <div class="gm-name" title="{{ m.品名 }}">{{ m.品名 }}</div>
+                            <div class="gm-meta">{{ m.shop }} · <b>¥{{ m.价格 }}</b>{% if m.原价 and m.原价 != m.价格 %} <del class="price-orig">¥{{ m.原价 }}</del>{% endif %}{% if m.折扣 %} <span class="zk-badge">{{ m.折扣 }}</span>{% endif %} · 月售 {{ m.月售 }} · {{ m.规格数 }}规格</div>
+                            {% if m.SKU列表 %}
+                            <span class="gm-sku-toggle" onclick="toggleGmSku('gmsku-{{ g.gid }}-{{ loop.index }}')">📦 查看规格明细 ▾</span>
+                            <div class="gm-sku-list" id="gmsku-{{ g.gid }}-{{ loop.index }}">
+                                {% for s in m.SKU列表[:8] %}
+                                <div class="gm-sku-item">
+                                    <span class="sp">{{ s.规格 or '（默认）' }}</span>
+                                    <span style="color:#64748b;font-size:11px;">月售 {{ s.月售 }}</span>
+                                    <span class="sp-price">¥{{ s.价格 }}</span>
+                                </div>
+                                {% endfor %}
+                                {% if m.SKU列表 | length > 8 %}<div style="font-size:10px;color:#94a3b8;padding-top:2px;">…共 {{ m.SKU列表 | length }} 个</div>{% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        <span class="gm-x" title="移出绑定组" onclick="grpRemove('{{ g.gid }}','{{ m.eid }}')">✕</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="grp-actions">
+                    <button class="btn btn-sm" onclick="grpRename('{{ g.gid }}','{{ g.名称 | e }}')">✏️ 改名</button>
+                    <button class="btn btn-sm btn-blue" onclick="grpAddSearch('{{ g.gid }}')">➕ 加条目</button>
+                    <button class="btn btn-sm btn-green" onclick="linkOwn('{{ g.gid }}')">🏠 关联自家品</button>
+                    <button class="btn btn-sm btn-gray" onclick="grpDelete('{{ g.gid }}')">解散</button>
+                </div>
+                <div id="grp-add-{{ g.gid }}" style="display:none;margin-top:8px;">
+                    <div class="own-search-box">
+                        <input type="text" id="grp-add-q-{{ g.gid }}" placeholder="输入品名关键词，从池内未绑定条目中找同品…" onkeydown="if(event.key==='Enter'){grpAddDo('{{ g.gid }}')}">
+                        <button class="btn btn-sm" onclick="grpAddDo('{{ g.gid }}')">搜索</button>
+                    </div>
+                    <div class="own-results" id="grp-add-r-{{ g.gid }}"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-tip2">暂无绑定组。在下方条目表勾选 ≥2 条跨店同品，点「绑定成组」；或点条目「推荐绑定」让系统六层匹配找同品。</div>
+        {% endif %}
+
+        <!-- ============ 条目总库 ============ -->
+        <div class="sec-title" style="margin-top:26px;">📋 条目总库
+            <span class="cnt">勾选跨店同品 → 绑定成组</span>
+            <span style="margin-left:auto;display:flex;gap:8px;">
+                <button class="btn btn-green" id="bindBtn" onclick="createGroup()" disabled title="勾选≥2条跨店条目后可用">🔗 绑定成组</button>
+            </span>
+        </div>
+        <div class="pool-tabs" id="shopTabs">
+            <a class="pool-tab active" data-shop="" href="javascript:void(0)" onclick="filterShop('')">🌐 总库（全部）</a>
+            {% for s in shops %}
+            <a class="pool-tab" data-shop="{{ s }}" href="javascript:void(0)" onclick="filterShop('{{ s | e }}')" title="{{ s }}">{{ s[:14] }}</a>
+            {% endfor %}
+        </div>
+
+        {% if data.entries %}
+        <div style="overflow-x:auto;">
+        <table class="pool-table" style="min-width:820px;">
+            <thead>
+                <tr>
+                    <th style="width:28px;"></th>
+                    <th style="width:34px;"></th>
+                    <th style="width:50px;">图</th>
+                    <th>品名</th>
+                    <th>店铺</th>
+                    <th>品牌/类目</th>
+                    <th>价格</th>
+                    <th>原价</th>
+                    <th>折扣</th>
+                    <th>月售</th>
+                    <th>状态</th>
+                    <th style="width:170px;">操作</th>
+                </tr>
+            </thead>
+            <tbody id="poolBody">
+                {% for e in data.entries %}
+                <tr data-shop="{{ e.shop }}" class="pool-row-click" onclick="togglePoolSku('psku-{{ loop.index }}', this)">
+                    <td><span class="pool-expand-arrow" id="arr-{{ loop.index }}">▸</span></td>
+                    <td><input type="checkbox" onclick="event.stopPropagation()" onchange="toggleSel('{{ e.eid }}', this)"></td>
+                    <td>
+                        {% if e.图片 %}<img class="pool-thumb" src="{{ e.图片 | img }}" loading="lazy" onerror="this.style.display='none';">
+                        {% else %}<span style="color:#cbd5e1;font-size:11px;">无图</span>{% endif %}
+                    </td>
+                    <td title="{{ e.品名 }}">{{ e.品名 }}</td>
+                    <td style="font-size:12px;color:#475569;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{{ e.shop }}">{{ e.shop }}</td>
+                    <td style="font-size:12px;color:#64748b;">{{ e.品牌 or '（无）' }}<br><span style="font-size:11px;color:#94a3b8;">{{ e.类目 or '—' }}</span></td>
+                    <td style="color:#dc2626;font-weight:600;">¥{{ e.价格 }}</td>
+                    <td>{% if e.原价 and e.原价 != e.价格 %}<del class="price-orig">¥{{ e.原价 }}</del>{% else %}<span style="color:#cbd5e1;font-size:11px;">—</span>{% endif %}</td>
+                    <td>{% if e.折扣 %}<span class="zk-badge">{{ e.折扣 }}</span>{% else %}<span style="color:#cbd5e1;font-size:11px;">—</span>{% endif %}</td>
+                    <td>{{ e.月售 }}</td>
+                    <td>
+                        {% if e.组 %}<span class="grp-chip" onclick="event.stopPropagation();document.getElementById('grp-{{ e.组 }}').scrollIntoView({behavior:'smooth'})" title="点击跳到绑定组">已绑定</span>
+                        {% else %}<span class="badge status-pending">未绑定</span>{% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-blue" onclick="event.stopPropagation();suggest('{{ e.eid }}')" title="查看跨店同品候选{% if e.候选数 %}（{{ e.候选数 }} 个待看）{% endif %}">🎯 推荐{% if e.候选数 %} · {{ e.候选数 }}{% endif %}</button>
+                        <button class="btn btn-sm btn-gray" onclick="event.stopPropagation();removeEntry('{{ e.eid }}',this)">移除</button>
+                    </td>
+                </tr>
+                <tr class="pool-sku-row" id="psku-{{ loop.index }}" data-shop="{{ e.shop }}">
+                    <td colspan="12">
+                        <div class="pool-sku-wrap">
+                            <div style="font-size:12px;color:#475569;font-weight:600;margin-bottom:4px;">📦 SKU 规格明细（{{ e.规格数 or 0 }} 个）</div>
+                            {% for s in (e.SKU列表 or [])[:12] %}
+                            <div class="pool-sku-item">
+                                <span class="sp">{{ s.规格 or '（默认）' }}</span>
+                                <span class="sp-sales">月售 {{ s.月售 }}</span>
+                                <span class="sp-price">¥{{ s.价格 }}</span>
+                            </div>
+                            {% endfor %}
+                            {% if (e.SKU列表 or []) | length > 12 %}
+                            <div style="font-size:11px;color:#94a3b8;">…共 {{ e.SKU列表 | length }} 个规格</div>
+                            {% endif %}
+                            {% if not e.SKU列表 %}
+                            <div style="font-size:11px;color:#cbd5e1;">无 SKU 明细</div>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-tip2">
+            候选池还是空的。到 <a href="/?filter=opp" style="color:#2563eb;">首页·引进候选</a> 点「➕ 加入候选池」，竞品会汇聚到这里。
+        </div>
+        {% endif %}
+    </main>
+</div>
+
+<!-- 推荐绑定弹窗 -->
+<div class="modal-mask" id="sugMask">
+    <div class="modal">
+        <h3 id="sugTitle">🎯 推荐绑定</h3>
+        <div class="sub" style="color:#64748b;font-size:12px;">按相似度降序；先看图再绑（防名字像但不同品）。拿不准的点「AI核实」（每次约0.1分钱，结果缓存）。</div>
+        <div id="sugBody"><div class="empty-tip2">加载中…</div></div>
+        <div style="text-align:right;margin-top:14px;">
+            <button class="btn" onclick="closeSug()">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- 关联自家品弹窗 -->
+<div class="modal-mask" id="ownMask">
+    <div class="modal" style="max-width:720px;">
+        <h3>🏠 关联自家品组</h3>
+        <div class="sub" style="color:#64748b;font-size:12px;margin-bottom:10px;">搜索自家品 → 点选查看规格详情 → 确认后关联（绑定组整体获得自家对应）。</div>
+        <div class="own-search-box">
+            <input type="text" id="ownQ" placeholder="搜索自家品（如：转换器 公牛）…" onkeydown="if(event.key==='Enter'){ownSearchDo()}">
+            <button class="btn btn-sm" onclick="ownSearchDo()">搜索</button>
+        </div>
+        <div class="own-results" id="ownResults"></div>
+        <div class="own-preview" id="ownPreview"></div>
+        <div style="text-align:right;margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+            <button class="btn" onclick="document.getElementById('ownMask').classList.remove('show')">关闭</button>
+            <button class="btn btn-green" id="ownConfirmBtn" onclick="confirmOwnLink()" disabled style="opacity:0.5;">✅ 确认关联</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function escapeHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function api(path, body){
+    return fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body||{})})
+        .then(function(r){return r.json();});
+}
+
+/* ---- 店铺筛选 ---- */
+function filterShop(shop){
+    document.querySelectorAll('#shopTabs .pool-tab').forEach(function(t){
+        t.classList.toggle('active', t.getAttribute('data-shop') === shop);
+    });
+    document.querySelectorAll('#poolBody tr.pool-row-click').forEach(function(tr){
+        var match = !shop || tr.getAttribute('data-shop') === shop;
+        tr.style.display = match ? '' : 'none';
+        var next = tr.nextElementSibling;
+        if (next && next.classList.contains('pool-sku-row')) {
+            next.style.display = match ? '' : 'none';
+        }
+    });
+}
+
+/* ---- 条目 SKU 展开/折叠 ---- */
+function togglePoolSku(id, row){
+    var skuRow = document.getElementById(id);
+    if (!skuRow) return;
+    var isOpen = skuRow.classList.toggle('open');
+    var idx = id.replace('psku-','');
+    var arr = document.getElementById('arr-'+idx);
+    if (arr) arr.classList.toggle('open', isOpen);
+}
+
+/* ---- 绑定组成员 SKU 展开/折叠 ---- */
+function toggleGmSku(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('open');
+    var toggle = el.previousElementSibling;
+    if (toggle && toggle.classList.contains('gm-sku-toggle')) {
+        toggle.textContent = el.classList.contains('open') ? '📦 收起规格明细 ▴' : '📦 查看规格明细 ▾';
+    }
+}
+
+/* ---- 高置信候选（入池自动推荐） ---- */
+function confirmPending(eid, eid2, btn){
+    btn.disabled = true; btn.textContent = '绑定中…';
+    api('/api/pool/pending/confirm', {pairs: [[eid, eid2]]}).then(function(d){
+        if (d.ok && d.created) { location.reload(); }
+        else { btn.disabled = false; btn.textContent = '🔗 绑定'; alert(d.msg || '未绑定（可能已入组）'); }
+    }).catch(function(e){ btn.disabled = false; btn.textContent = '🔗 绑定'; alert('出错: ' + e.message); });
+}
+function confirmAllPending(btn){
+    if (!confirm('把全部高置信候选绑成同品组？（建议先逐对看图确认）')) return;
+    var pairs = [];
+    document.querySelectorAll('.pd-row').forEach(function(r){
+        var m = r.id.replace('pd-', '').split('-');
+        if (m.length === 2) pairs.push(m);
+    });
+    btn.disabled = true; btn.textContent = '绑定中…';
+    api('/api/pool/pending/confirm', {pairs: pairs}).then(function(d){
+        if (d.ok) location.reload();
+    }).catch(function(e){ btn.disabled = false; btn.textContent = '🔗 全部绑定'; alert('出错: ' + e.message); });
+}
+function dismissPending(eid, eid2, btn){
+    api('/api/pool/suggest/dismiss', {eid: eid, eid2: eid2}).then(function(d){
+        var row = document.getElementById('pd-' + eid + '-' + eid2);
+        if (row) row.remove();
+        if (!document.querySelector('.pd-row')) location.reload();
+    });
+}
+
+/* ---- 勾选 + 绑定成组 ---- */
+var sel = {};
+function toggleSel(eid, cb){
+    if (cb.checked) sel[eid] = cb; else delete sel[eid];
+    var n = Object.keys(sel).length;
+    var btn = document.getElementById('bindBtn');
+    btn.disabled = n < 2;
+    btn.textContent = n >= 2 ? '🔗 绑定成组（已选 ' + n + '）' : '🔗 绑定成组';
+}
+function createGroup(){
+    var eids = Object.keys(sel);
+    if (eids.length < 2) return;
+    api('/api/pool/group/create', {eids: eids}).then(function(d){
+        if (d.ok) { location.reload(); }
+        else alert(d.msg || '创建失败');
+    }).catch(function(e){alert('出错: '+e.message);});
+}
+
+/* ---- 推荐绑定（六层级联） ---- */
+var sugCtx = {};
+function suggest(eid){
+    sugCtx = {eid: eid};
+    document.getElementById('sugMask').classList.add('show');
+    document.getElementById('sugBody').innerHTML = '<div class="empty-tip2">六层匹配计算中…（条码→品牌→名称→语义）</div>';
+    api('/api/pool/suggest', {eid: eid}).then(function(d){
+        if (!d.ok) { document.getElementById('sugBody').innerHTML = '<div class="empty-tip2">失败：'+escapeHtml(d.msg||'')+'</div>'; return; }
+        renderSug(d.suggestions);
+    }).catch(function(e){
+        document.getElementById('sugBody').innerHTML = '<div class="empty-tip2">出错: '+e.message+'</div>';
+    });
+}
+function renderSug(list){
+    var body = document.getElementById('sugBody');
+    if (!list || !list.length){
+        body.innerHTML = '<div class="empty-tip2">池内暂无其他店的候选。先把别家店的同品也加入候选池，再来绑定。</div>';
+        return;
+    }
+    var html = '';
+    list.forEach(function(s, i){
+        var cls = s.layer.indexOf('L1') === 0 ? 'layer-l1' : (s.layer.indexOf('L2') === 0 || s.layer.indexOf('L3') === 0 ? 'layer-l2' : '');
+        html += '<div class="sug-row">' +
+            '<div class="sug-cmp">' +
+              '<div class="sug-side" id="sug-me"><div class="tag">本条目</div>'+sugCtx.meHtml+'</div>' +
+              '<div class="sug-side"><div class="tag">' + escapeHtml(s.shop) + '</div>' +
+                (s.图片 ? '<img src="'+escapeHtml(s.图片)+'" loading="lazy" onerror="this.style.display=\'none\';">' : '<div style="width:90px;height:90px;line-height:90px;background:#f8fafc;border-radius:8px;font-size:11px;color:#cbd5e1;">无图</div>') +
+                '<div class="nm">'+escapeHtml(s.品名)+'</div>' +
+                '<div class="pr">¥'+escapeHtml(s.价格)+'</div><div style="font-size:11px;color:#64748b;">月售 '+escapeHtml(String(s.月售))+'</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="sug-act">' +
+              '<span class="layer-badge '+cls+'">'+escapeHtml(s.layer || '—')+' '+(s.score*100).toFixed(0)+'%</span>' +
+              '<span style="font-size:11px;color:#64748b;">'+escapeHtml(s.reason||'')+'</span>' +
+              '<span id="llm-out-'+i+'" style="font-size:12px;"></span>' +
+              '<button class="btn btn-sm btn-green" onclick="bindPair(\''+sugCtx.eid+'\',\''+s.eid+'\',\''+escapeHtml(s.组)+'\', this)">🔗 '+(s.组 ? '加入其组' : '绑成同品')+'</button>' +
+              '<button class="btn btn-sm" onclick="llmVerify(\''+sugCtx.eid+'\',\''+s.eid+'\','+i+',this)">🤖 AI核实</button>' +
+            '</div>' +
+          '</div>';
+    });
+    body.innerHTML = html;
+}
+function bindPair(eid, eid2, gid2, btn){
+    btn.disabled = true; btn.textContent = '绑定中…';
+    var p = gid2 ? api('/api/pool/group/add', {gid: gid2, eid: eid})
+                 : api('/api/pool/group/create', {eids: [eid, eid2]});
+    p.then(function(d){
+        if (d.ok) { location.reload(); }
+        else { btn.disabled = false; btn.textContent = '🔗 绑定'; alert(d.msg || '失败'); }
+    }).catch(function(e){ btn.disabled = false; btn.textContent = '🔗 绑定'; alert('出错: '+e.message); });
+}
+function llmVerify(eid, eid2, i, btn){
+    var out = document.getElementById('llm-out-'+i);
+    btn.disabled = true; btn.textContent = '核实中…';
+    api('/api/pool/llm_verify', {eid: eid, eid2: eid2}).then(function(d){
+        btn.style.display = 'none';
+        if (!d.ok) { out.innerHTML = '<span style="color:#b91c1c;">失败：'+escapeHtml(d.msg||'')+'</span>'; return; }
+        var cls = d.verdict === '是' ? 'llm-yes' : (d.verdict === '否' ? 'llm-no' : 'llm-unsure');
+        out.innerHTML = '<span class="'+cls+'">AI'+d.verdict+' '+(d.confidence*100).toFixed(0)+'%</span> <span style="color:#94a3b8;font-size:11px;">'+escapeHtml(d.reason||'')+(d.cached ? '（缓存）' : '')+'</span>';
+    }).catch(function(e){
+        btn.disabled = false; btn.textContent = '🤖 AI核实';
+        out.innerHTML = '<span style="color:#b91c1c;">出错: '+e.message+'</span>';
+    });
+}
+function closeSug(){ document.getElementById('sugMask').classList.remove('show'); }
+
+/* ---- 条目/组管理 ---- */
+function removeEntry(eid, btn){
+    if (!confirm('确定移出候选池？（若在绑定组中会同时移出组）')) return;
+    api('/api/pool/remove', {eid: eid}).then(function(d){ location.reload(); });
+}
+function grpRemove(gid, eid){
+    if (!confirm('移出该绑定组？（组内只剩1条时组自动解散）')) return;
+    api('/api/pool/group/remove', {gid: gid, eid: eid}).then(function(d){ location.reload(); });
+}
+function grpRename(gid, name){
+    var n = prompt('绑定组名称：', name);
+    if (n === null) return;
+    api('/api/pool/group/rename', {gid: gid, name: n}).then(function(d){ location.reload(); });
+}
+function grpDelete(gid){
+    if (!confirm('解散该绑定组？条目回到未绑定状态（不会出池）。')) return;
+    api('/api/pool/group/delete', {gid: gid}).then(function(d){ location.reload(); });
+}
+function grpAddSearch(gid){
+    var box = document.getElementById('grp-add-'+gid);
+    box.style.display = box.style.display === 'none' ? '' : 'none';
+}
+function grpAddDo(gid){
+    var q = document.getElementById('grp-add-q-'+gid).value.trim();
+    var out = document.getElementById('grp-add-r-'+gid);
+    if (!q) { out.innerHTML = ''; return; }
+    // 从本页表格内找（未绑定、他店、品名含关键词）
+    var hits = [];
+    document.querySelectorAll('#poolBody tr.pool-row-click').forEach(function(tr){
+        var tds = tr.querySelectorAll('td');
+        if (tds.length < 12) return;
+        var nm = tds[3].innerText.trim();
+        var shop = tr.getAttribute('data-shop') || '';
+        var bound = tds[10].innerText.indexOf('已绑定') >= 0;
+        if (!bound && nm.toLowerCase().indexOf(q.toLowerCase()) >= 0) {
+            hits.push({nm: nm, shop: shop});
+        }
+    });
+    var html = hits.length ? '' : '<div style="color:#94a3b8;font-size:12px;padding:6px;">本页未找到未绑定的匹配条目（可换关键词或先切到总库Tab）</div>';
+    hits.slice(0, 8).forEach(function(h){
+        html += '<div class="own-r" onclick="alert(\'请先在右侧操作列点「推荐绑定」或勾选后绑定成组\')">' + escapeHtml(h.nm) + ' <span style="color:#94a3b8;">· ' + escapeHtml(h.shop) + '</span></div>';
+    });
+    out.innerHTML = html;
+}
+
+/* ---- 关联自家品（选中→预览→确认 三步） ---- */
+var linkCtx = null;
+var pickedOwn = null;  // {spu, name}
+
+function linkOwn(gid){
+    linkCtx = gid;
+    pickedOwn = null;
+    document.getElementById('ownMask').classList.add('show');
+    document.getElementById('ownResults').innerHTML = '';
+    document.getElementById('ownPreview').classList.remove('show');
+    document.getElementById('ownPreview').innerHTML = '';
+    var btn = document.getElementById('ownConfirmBtn');
+    btn.disabled = true; btn.style.opacity = '0.5';
+}
+function linkOwnClear(gid){
+    if (!confirm('解除自家品关联？')) return;
+    api('/api/pool/group/link_own', {gid: gid, own_gid: ''}).then(function(d){ location.reload(); });
+}
+function ownSearchDo(){
+    var q = document.getElementById('ownQ').value.trim();
+    var out = document.getElementById('ownResults');
+    if (!q) { out.innerHTML = ''; return; }
+    // 重置选中状态
+    pickedOwn = null;
+    document.getElementById('ownPreview').classList.remove('show');
+    document.getElementById('ownPreview').innerHTML = '';
+    var btn = document.getElementById('ownConfirmBtn');
+    btn.disabled = true; btn.style.opacity = '0.5';
+
+    out.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:6px;">搜索中…</div>';
+    fetch('/api/own_spu_search?q=' + encodeURIComponent(q))
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            var rs = d.results || [];
+            if (!rs.length) { out.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:6px;">无结果</div>'; return; }
+            var html = '';
+            rs.slice(0, 12).forEach(function(r){
+                html += '<div class="own-r" data-spu="' + escapeHtml(r.品组ID) + '" data-name="' + escapeHtml(String(r.品名).replace(/"/g,'&quot;')) + '"'
+                    + ' onclick="pickOwnItem(this, \'' + escapeHtml(r.品组ID) + '\', \'' + escapeHtml(String(r.品名).replace(/'/g,"\\'")) + '\')">'
+                    + '<b>' + escapeHtml(r.品名) + '</b> <span style="color:#94a3b8;">· 品组' + escapeHtml(r.品组ID) + ' · 月销' + escapeHtml(String(r.月销合计)) + '</span></div>';
+            });
+            out.innerHTML = html;
+        });
+}
+
+/* 选中一条自家品：高亮 + 加载详情预览 */
+function pickOwnItem(el, spu, name){
+    // 高亮选中项
+    document.querySelectorAll('#ownResults .own-r').forEach(function(r){ r.classList.remove('selected'); });
+    el.classList.add('selected');
+    pickedOwn = {spu: spu, name: name};
+    // 启用确认按钮
+    var btn = document.getElementById('ownConfirmBtn');
+    btn.disabled = false; btn.style.opacity = '1';
+    // 加载详情预览
+    var preview = document.getElementById('ownPreview');
+    preview.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:6px;">加载详情…</div>';
+    preview.classList.add('show');
+    fetch('/api/own_spu_detail?spu=' + encodeURIComponent(spu) + '&q=' + encodeURIComponent(name) + '&scene=pool')
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            if (!d.ok) { preview.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:6px;">详情加载失败</div>'; return; }
+            renderOwnPreview(preview, d.detail);
+        })
+        .catch(function(e){ preview.innerHTML = '<div style="color:#b91c1c;font-size:12px;padding:6px;">加载出错: ' + escapeHtml(e.message) + '</div>'; });
+}
+
+/* 渲染自家品详情到预览区 */
+function renderOwnPreview(box, dd){
+    var img = dd.图片
+        ? '<img class="op-img" src="' + escapeHtml(dd.图片) + '" onerror="this.outerHTML=\'<div class=op-img-ph>无图</div>\'">'
+        : '<div class="op-img-ph">无图</div>';
+    var skuList = dd.SKU列表 || [];
+    var skuHtml = skuList.slice(0, 10).map(function(s){
+        return '<div class="own-sku-item">'
+            + '<span class="sp">' + escapeHtml(s.规格 || '（默认）') + '</span>'
+            + '<span style="color:#64748b;">月售 ' + escapeHtml(String(s.月售 || 0)) + '</span>'
+            + '<span class="sp-price">¥' + escapeHtml(s.售价 || '') + '</span>'
+            + '</div>';
+    }).join('');
+    if (skuList.length > 10) skuHtml += '<div style="font-size:10px;color:#94a3b8;padding:2px 6px;">…共 ' + skuList.length + ' 个规格</div>';
+    var priceRange = (dd.售价区间 && dd.售价区间[0] != null)
+        ? '¥' + dd.售价区间[0] + (dd.售价区间[1] !== dd.售价区间[0] ? ' - ¥' + dd.售价区间[1] : '')
+        : '—';
+    box.innerHTML = '<div class="op-head">' + img
+        + '<div style="flex:1;min-width:0;">'
+        + '<div class="op-name">' + escapeHtml(dd.品名) + '</div>'
+        + '<div class="op-meta">月销合计 <b>' + escapeHtml(String(dd.月销合计)) + '</b>'
+        + ' · 售价 <b>' + priceRange + '</b>'
+        + ' · ' + escapeHtml(String(dd.规格数)) + '规格'
+        + ' · ' + escapeHtml(dd.品牌 || '（无品牌）') + '</div>'
+        + '<div class="op-meta">品组ID：<b>' + escapeHtml(dd.品组ID) + '</b></div>'
+        + '</div></div>'
+        + '<div class="own-sku-list">' + (skuHtml || '<div style="color:#94a3b8;font-size:11px;">无规格</div>') + '</div>';
+}
+
+/* 确认关联 */
+function confirmOwnLink(){
+    if (!pickedOwn) { alert('请先搜索并选中一个自家品'); return; }
+    api('/api/pool/group/link_own', {gid: linkCtx, own_gid: pickedOwn.spu, own_name: pickedOwn.name})
+        .then(function(d){ location.reload(); });
+}
+
+/* 推荐弹窗打开前抓本条目信息（左侧图卡） */
+(function(){
+    document.addEventListener('click', function(ev){
+        var b = ev.target.closest ? ev.target.closest('button') : null;
+        if (b && b.getAttribute('onclick') && b.getAttribute('onclick').indexOf('suggest(') === 0){
+            var eid = b.getAttribute('onclick').match(/'([^']+)'/)[1];
+            var tr = b.closest('tr');
+            var img = tr.querySelector('img.pool-thumb');
+            var nm = tr.querySelectorAll('td')[3].innerText.trim();
+            var pr = tr.querySelectorAll('td')[6].innerText.trim();
+            sugCtx.meHtml = (img ? '<img src="'+img.src+'" onerror="this.style.display=\'none\';">' : '<div style="width:90px;height:90px;line-height:90px;background:#f8fafc;border-radius:8px;font-size:11px;color:#cbd5e1;">无图</div>') +
+                '<div class="nm">'+escapeHtml(nm)+'</div><div class="pr">'+escapeHtml(pr)+'</div>';
+        }
+    });
+})();
+</script>
+</body>
+</html>

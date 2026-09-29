@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>已对齐建议 - 选品面板</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+    {% set active = 'tools' %}
+    {% include "_nav.html" %}
+
+    <header class="main-header">
+        <h1>⚡ 已对齐建议（针对已匹配内容，AI 逐品建议）</h1>
+        <div class="sub">基于已确认的"竞品-自家"配对生成建议：定价/差距/销量/防守/毛利。建议仅供参考，不自动改任何数据。</div>
+    </header>
+
+    <main>
+        <div class="analysis-header">
+            <h1>📊 生成 AI 建议</h1>
+            <div class="sub">勾选店铺（或全选），点生成。仅处理已确认配对（重点配对逐条建议，其余聚合）。</div>
+            <div style="margin-top:10px;">
+                <label><input type="checkbox" id="checkAll" checked onchange="toggleAll(this)"> 全选</label>
+                <span id="shopChips"></span>
+            </div>
+            <div style="margin-top:12px;">
+                <button class="btn btn-success" onclick="generateAdvice()">✨ 生成已对齐建议</button>
+                <span id="genStatus" style="font-size:13px;color:#1e40af;margin-left:10px;"></span>
+            </div>
+        </div>
+
+        <div id="adviceTable" style="display:none;"></div>
+        <div id="adviceReport" style="display:none;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-top:14px;"></div>
+    </main>
+</div>
+
+<script>
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+let allShops = [];
+
+function loadShops() {
+    fetch('/api/analysis/shops')
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+            allShops = (d.shops || []).map(function(s){ return s.name; });
+            let html = '';
+            allShops.forEach(function(s) {
+                html += '<label style="margin-left:10px;font-size:13px;"><input type="checkbox" class="shop-sel" value="' + escapeHtml(s) + '" checked> ' + escapeHtml(s) + '</label>';
+            });
+            document.getElementById('shopChips').innerHTML = html;
+        })
+        .catch(function(){});
+}
+
+function toggleAll(ck) {
+    document.querySelectorAll('.shop-sel').forEach(function(cb){ cb.checked = ck.checked; });
+}
+
+function getSelected() {
+    return Array.from(document.querySelectorAll('.shop-sel:checked')).map(function(cb){ return cb.value; });
+}
+
+function generateAdvice() {
+    const shops = getSelected();
+    if (!shops.length) { alert('请至少选择一家店'); return; }
+    const status = document.getElementById('genStatus');
+    status.textContent = '正在生成（约10-30秒）...';
+    fetch('/api/advice/generate', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shops: shops})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        status.textContent = '';
+        if (!d.ok) { alert('生成失败: ' + d.msg); return; }
+        renderTable(d.rows);
+        renderReport(d.report);
+        status.textContent = d.msg;
+    })
+    .catch(function(e){ status.textContent = ''; alert('请求出错: ' + e.message); });
+}
+
+function renderTable(rows) {
+    const box = document.getElementById('adviceTable');
+    box.style.display = 'block';
+    let html = '<table class="candidate-table" style="font-size:12px;"><thead><tr>' +
+        '<th>竞品（店）</th><th>竞品价/月售</th><th>自家商品</th><th>自家售价/采购/月销</th>' +
+        '<th>价差</th><th>月售比</th><th>AI 建议</th><th>状态</th></tr></thead><tbody>';
+    rows.forEach(function(r) {
+        html += '<tr>';
+        html += '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(r.竞品Sku_id) + '">' + escapeHtml(r.竞品商品名) + '<br><span style="color:#94a3b8;font-size:11px;">[' + escapeHtml(r.竞店名称) + ']</span></td>';
+        html += '<td>' + escapeHtml(r.竞品价) + ' / ' + escapeHtml(r.竞品月售) + '</td>';
+        html += '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(r.自家SKUID) + '">' + escapeHtml(r.自家商品名) + '</td>';
+        html += '<td>' + escapeHtml(r.自家售价) + ' / ' + escapeHtml(r.自家采购价) + ' / ' + escapeHtml(r.自家月销) + '</td>';
+        html += '<td>' + escapeHtml(r.价差率) + '</td><td>' + escapeHtml(r.月售比) + '</td>';
+        html += '<td style="min-width:220px;">' + escapeHtml(r.建议 || '') + '</td>';
+        html += '<td style="white-space:nowrap;">' +
+            '<button class="btn btn-sm" onclick="setStatus(\'' + escapeHtml(r.竞店名称) + '\',\'' + escapeHtml(r.竞品Sku_id) + '\',\'已采纳\',this)">采纳</button> ' +
+            '<button class="btn btn-sm" onclick="setStatus(\'' + escapeHtml(r.竞店名称) + '\',\'' + escapeHtml(r.竞品Sku_id) + '\',\'忽略\',this)">忽略</button> ' +
+            '<span style="font-size:11px;color:#94a3b8;">' + escapeHtml(r.状态) + '</span></td>';
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    box.innerHTML = html;
+}
+
+function renderReport(md) {
+    const box = document.getElementById('adviceReport');
+    box.style.display = 'block';
+    let html = '<div style="font-weight:700;margin-bottom:8px;">🤖 AI 综合解读</div><div style="line-height:1.9;font-size:14px;">';
+    String(md || '').split('\n').forEach(function(l) {
+        const t = escapeHtml(l);
+        if (t.startsWith('## ')) html += '<div style="font-weight:600;margin:8px 0 4px;color:#1e3a8a;">' + t.slice(3) + '</div>';
+        else if (t.startsWith('- ')) html += '<div style="padding-left:10px;">· ' + t.slice(2) + '</div>';
+        else if (t.trim()) html += '<div>' + t + '</div>';
+    });
+    html += '</div>';
+    box.innerHTML = html;
+}
+
+function setStatus(shop, sku, status, btn) {
+    fetch('/api/advice/status', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shop: shop, sku: sku, status: status})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        if (d.ok) {
+            const row = btn.parentNode;
+            row.querySelector('span').textContent = status;
+        }
+    })
+    .catch(function(){});
+}
+
+window.onload = loadShops;
+</script>
+</body>
+</html>

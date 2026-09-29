@@ -1,0 +1,21 @@
+# 竞品表导入配置（Fiddler 小程序抓包直导格式）
+# 来源：meituan_c_crawler/build_table_from_fiddler.py --panel-out 产出
+# 说明：build_table_from_fiddler.py 的 export_for_panel() 按本映射输出列名，
+#       面板「导入」页选择本 Profile 即可零手工映射。
+# 用法：python scripts/import_adapter.py --extract <竞品_X_fiddler导入.xlsx> --profile Fiddler小程序抓包
+source_name: Fiddler小程序抓包
+mapping:
+  商品ID: comp_id
+  SKU_ID: sku_id
+  一级类: category1
+  二级类: category2
+  三级类: category3
+  商品名: name
+  规格: spec
+  条形码: barcode
+  sku库存: stock
+  原价: price
+  折后价: discount_price
+  月售数值: sales
+  图片url: image_url
+created_at: '2026-08-26 00:00:00'

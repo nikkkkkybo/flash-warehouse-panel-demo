@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>竞品详情 - 选品面板</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+    {% set active = 'browse' %}
+    {% include "_nav.html" %}
+
+    <main>
+        <div class="detail-top">
+            <a href="{{ back_url }}" class="btn btn-sm">← 返回{% if from_page == 'coarse' %}粗对齐{% else %}竞品总览{% endif %}</a>
+            {% if next_sku %}
+            <a href="/comp_detail?shop={{ item.店铺 | urlencode }}&sku={{ next_sku | urlencode }}{% if from_page == 'coarse' %}&from=coarse{% endif %}" class="btn btn-sm" title="{{ next_name }}">下一个待处理 →</a>
+            {% endif %}
+            <span class="detail-shop">店铺：<b>{{ item.店铺 }}</b></span>
+            {% if item.状态 == 'aligned' %}
+            <span class="badge status-confirmed">已对应</span>
+            {% elif item.状态 == 'coarse' %}
+            <span class="badge status-coarse">已粗对齐（品已对应，规格待补）</span>
+            {% elif item.状态 == 'pending' %}
+            <span class="badge status-pending">待确认</span>
+            {% elif item.状态 == 'nomatch' %}
+            <span class="badge status-nomatch">无对应</span>
+            {% else %}
+            <span class="badge">暂未匹配</span>
+            {% endif %}
+        </div>
+
+        {% if item.状态 == 'coarse' and item.自家商品名 %}
+        <div class="align-card" style="margin-top:12px;">
+            <div style="font-size:14px;font-weight:600;margin-bottom:6px;">🏷 已粗对齐：品已对应到自家商品</div>
+            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;font-size:13px;">
+                <b>{{ item.自家商品名 }}</b>
+                <span style="color:#94a3b8;font-size:12px;">（规格待补：进入下方对应区确认规格后变为「已对应」）</span>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="detail-grid">
+            <!-- 左侧：竞品信息 -->
+            <div class="left-panel">
+                <div class="panel-title">🔍 竞品信息</div>
+                {% if item.图片 %}
+                <img class="comp-image" src="{{ item.图片 | img }}"
+                     onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22240%22 height=%22240%22><rect width=%22240%22 height=%22240%22 fill=%22%23f0f4f8%22/><text x=%22120%22 y=%22125%22 text-anchor=%22middle%22 fill=%22%23999%22 font-size=%2216%22>图片加载失败</text></svg>';">
+                {% else %}
+                <div class="comp-image" style="display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:14px;">暂无图片</div>
+                {% endif %}
+                <table class="info-table">
+                    <tr><th>商品名</th><td>{{ item.商品名 }}</td></tr>
+                    <tr><th>店铺</th><td>{{ item.店铺 }}</td></tr>
+                    <tr><th>品牌</th><td>{{ item.品牌 }}</td></tr>
+                    <tr><th>型号</th><td>{{ item.型号 }}</td></tr>
+                    <tr><th>类目</th><td>{{ item.类目 }}</td></tr>
+                    <tr><th>规格</th><td>{{ item.规格 }}</td></tr>
+                    <tr><th>到手价</th><td style="color:#dc2626;font-weight:600;">{{ item.价格 }}</td></tr>
+                    <tr><th>原价</th><td>{{ item.原价 }}</td></tr>
+                    <tr><th>月售</th><td>{{ item.月售 }}</td></tr>
+                    <tr><th>条码</th><td>{{ item.条码 }}</td></tr>
+                    <tr><th>竞品编号</th><td>{{ item.Sku_id }}</td></tr>
+                </table>
+                <div style="margin-top:12px;">
+                    <a class="btn" href="/matrix?shop={{ item.店铺 }}&sku={{ item.Sku_id }}">🌐 多店横比（同款比价 / 月售 / 有货）</a>
+                </div>
+
+                {% if item.hist_n and item.hist_n >= 2 %}
+                <!-- P1.2 历史轨迹：历次导入快照的 价格/月售/库存（数据源=价格观测历史，每次导入自动留存） -->
+                <details class="hist-box" open>
+                    <summary>📈 历史轨迹（{{ item.hist_n }} 次观测）</summary>
+                    <table class="hist-table">
+                        <tr><th>观测时间</th><th>到手价</th><th>月售</th><th>库存</th></tr>
+                        {% for h in item.hist_rows | reverse %}
+                        <tr>
+                            <td>{{ h.t }}</td>
+                            <td>
+                                {% if h.price is not none %}¥{{ h.price }}{% else %}—{% endif %}
+                                {% if h.delta.price is defined %}
+                                    {% if h.delta.price < 0 %}<span class="diff-badge diff-down" title="较上次降价">↓{{ -h.delta.price }}</span>
+                                    {% else %}<span class="diff-badge diff-up" title="较上次涨价">↑+{{ h.delta.price }}</span>{% endif %}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if h.sales is not none %}{{ h.sales | int }}{% else %}—{% endif %}
+                                {% if h.delta.sales is defined %}
+                                    {% if h.delta.sales > 0 %}<span class="diff-badge diff-up">↑{{ h.delta.sales }}</span>
+                                    {% elif h.delta.sales < 0 %}<span class="diff-badge diff-down">↓{{ -h.delta.sales }}</span>{% endif %}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if h.stock is not none %}{{ h.stock | int }}{% else %}—{% endif %}
+                                {% if h.delta.stock is defined %}
+                                    {% if h.delta.stock > 0 %}<span class="diff-badge diff-up" title="回补">↑{{ h.delta.stock }}</span>
+                                    {% elif h.delta.stock < 0 %}<span class="diff-badge diff-down" title="库存下降">↓{{ -h.delta.stock }}</span>{% endif %}
+                                    {% if h.stock == 0 %}<span class="badge status-nomatch" title="库存归零">断货</span>{% endif %}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                    <div style="font-size:11px;color:#94a3b8;margin-top:6px;">每次导入自动留存一份快照（append-only，旧数据永不覆盖）——同店再次导入后这里自动多一行。</div>
+                </details>
+                {% else %}
+                <div style="font-size:11px;color:#94a3b8;margin-top:10px;">📈 历史轨迹：该品暂只有 {{ item.hist_n or 0 }} 次观测——同店再次导入后，这里显示历次 价格/月售/库存 走势。</div>
+                {% endif %}
+            </div>
+
+            <!-- 右侧：匹配情况与操作 -->
+            <div class="right-panel">
+                <div class="panel-title">🤝 匹配情况</div>
+
+                {% if item.状态 == 'aligned' %}
+                <div class="align-card align-ok">
+                    <div style="font-size:14px;margin-bottom:8px;">✅ 已对应自家品：</div>
+                    {% if item.自家图片url %}
+                    <img src="{{ item.自家图片url | img }}" style="max-width:160px;max-height:160px;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:8px;"
+                         onerror="this.style.display='none';">
+                    {% endif %}
+                    <div style="font-size:16px;font-weight:600;margin-bottom:4px;">{{ item.自家商品名 }}</div>
+                    <div style="margin:6px 0;">
+                        <span style="color:#64748b;font-size:12px;">自家SKU：</span>
+                        <b>{{ item.自家SKUID }}</b>
+                        <button class="btn btn-sm" onclick="copySku('{{ item.自家SKUID }}', this)">📋 复制SKU</button>
+                    </div>
+                    <table class="info-table" style="margin-top:8px;">
+                        <tr><th>售价</th><td style="color:#dc2626;font-weight:600;">{{ item.自家售价 }}</td>
+                            <th>采购价</th><td>{{ item.自家采购价 }}</td></tr>
+                        <tr><th>月销(30天)</th><td title="口径=补货参考快照合计（详见首页图例）">{{ item.自家月销 }}</td>
+                            <th>7天销量</th><td>{% if item.自家7天销量 %}{{ item.自家7天销量 }}{% if item.自家趋势 %} <span class="diff-badge {% if '↑' in item.自家趋势 %}diff-up{% elif '↓' in item.自家趋势 %}diff-down{% else %}pct-mid{% endif %}" title="7天日均 vs 30天日均">{{ item.自家趋势 }}</span>{% endif %}{% else %}—{% endif %}</td></tr>
+                        <tr><th>可用库存</th><td>{% if item.自家可用库存 %}{{ item.自家可用库存 }}{% else %}—{% endif %}</td>
+                            <th>有图</th><td>{{ item.自家有图 }}</td></tr>
+                        <tr><th>规格</th><td>{{ item.自家规格 }}</td>
+                            <th>品牌</th><td>{{ item.自家品牌 }}</td></tr>
+                        <tr><th>条码</th><td>{{ item.自家条码 }}</td>
+                            <th>SPU</th><td>{{ item.自家SPUID }}</td></tr>
+                    </table>
+                    <div style="color:#94a3b8;font-size:12px;margin-top:6px;">匹配依据：{{ item.匹配依据 }}</div>
+                </div>
+
+                {% elif item.状态 == 'pending' and item.pool_idx is not none %}
+                <div class="align-card align-pending">
+                    <div style="font-size:14px;margin-bottom:8px;">该竞品在人工确认候选池中{% if spu_cands %}——机器候选已列在下方，<b>直接在这里确认即可</b>{% else %}（机器没给出候选，您可手动搜索对应）{% endif %}：</div>
+                    <div style="color:#94a3b8;font-size:12px;">{% if item.匹配层文本 %}机器来源：{{ item.匹配层文本 }}{% endif %}</div>
+                    <a href="/item/{{ item.pool_idx }}?shop={{ item.店铺 }}" class="btn" style="margin-top:8px;">去人工池（完整对照 / 标记无对应）</a>
+                </div>
+
+                {% elif item.状态 == 'nomatch' %}
+                <div class="align-card align-nomatch">
+                    <div style="font-size:14px;">已标记<b>无对应</b>：您确认过自家库中没有对应商品。</div>
+                </div>
+
+                {% else %}
+                <div class="align-card">
+                    <div style="font-size:14px;margin-bottom:6px;">暂未匹配：机器没能给出可靠候选。</div>
+                    <div style="color:#94a3b8;font-size:12px;line-height:1.8;">
+                        可能原因：竞品缺品牌/型号/类目，或名称与自家商品差异较大（匹配不上是正常的，商品信息照常可看）。
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- 机器收敛行：类 / 品 / 规格 三层锁定状态 -->
+                <div class="align-card" style="margin-top:14px;">
+                    <div style="font-size:14px;font-weight:600;margin-bottom:8px;">🔍 机器收敛（从大到小：类 → 品 → 规格）</div>
+                    <div style="background:#f8fafc;border-radius:8px;padding:10px 12px;font-size:13px;color:#475569;line-height:2;">
+                        {% set ok_cls = 'color:#166534;font-weight:600;' %}
+                        {% set no_cls = 'color:#991b1b;font-weight:600;' %}
+                        <span>类：{{ conf_data['类']['名称'] or '（无类目）' }}
+                            {% if conf_data['类']['锁定'] %}<span style="{{ ok_cls }}">✓ 已锁定</span>（置信{{ conf_data['类']['置信'] }}）
+                            {% else %}<span style="{{ no_cls }}">✗ 未锁定</span>{% endif %}</span>
+                        →
+                        <span>品：{{ conf_data['品']['名称'] or '（未定）' }}
+                            {% if conf_data['品']['锁定'] %}<span style="{{ ok_cls }}">✓ 已锁定</span>（置信{{ conf_data['品']['置信'] }}）
+                            {% else %}<span style="{{ no_cls }}">✗ 未锁定</span>{% endif %}</span>
+                        →
+                        <span>规格：{{ conf_data['规格']['名称'] or '（未定）' }}
+                            {% if conf_data['规格']['锁定'] %}<span style="{{ ok_cls }}">✓ 已锁定</span>（{{ conf_data['规格']['置信'] }}）
+                            {% else %}<span style="{{ no_cls }}">✗ 未锁定</span>{% endif %}</span>
+                    </div>
+                </div>
+
+                <!-- 粗对齐（品级）候选品组：机器候选直接在详情页确认（不用去池里翻） -->
+                {% if spu_cands %}
+                <div class="align-card" style="margin-top:14px;">
+                    <div style="font-size:14px;font-weight:600;margin-bottom:8px;">🔗 机器候选自家品组（{% if spu_cands and spu_cands[0].来源层 %}来源：{{ spu_cands[0].来源层 }}{% else %}品级推荐{% endif %}）</div>
+                    <div style="color:#64748b;font-size:12px;margin-bottom:8px;">点「确认此品（粗对齐）」直接定夺（规格后补）；点开对应后可再补规格；拿不准点「🤖 大模型辅助判断」。</div>
+                    <div style="background:#f8fafc;border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:12px;color:#475569;">
+                        🗂 类目映射：竞品类目「{{ item.类目 }}」{% if cat_suggestion %} → 自家类目「{{ cat_suggestion }}」（确认此品时顺带确认此映射）{% else %}尚未映射（确认此品时将自动记录映射到所选自家品所属类目）{% endif %}
+                    </div>
+                    {% for c in spu_cands %}
+                    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:8px;margin-bottom:6px;">
+                        <span style="flex:1;font-size:13px;">
+                            <b>{{ c.品名 }}</b>
+                            <span style="color:#94a3b8;font-size:12px;">{{ c.品牌 }} {{ c.型号 }}{% if c.规格数 %} · {{ c.规格数 }}规格{% endif %}{% if c.相似度 %} · 相似{{ c.相似度 }}{% elif c.置信度 %} · 置信{{ c.置信度 }}{% endif %}{% if c.来源层 %} · {{ c.来源层 }}{% endif %}</span>
+                        </span>
+                        <button class="btn btn-sm" data-idx="{{ c.pool_idx }}" data-name="{{ c.品名 | e }}" onclick="confirmSpuOnly(this.getAttribute('data-idx'), this.getAttribute('data-name'))">确认此品（粗对齐）</button>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- AI 大模型辅助判断 -->
+                <div class="align-card" style="margin-top:14px;">
+                    <div style="font-size:14px;font-weight:600;margin-bottom:8px;">🤖 大模型辅助判断（可选，点才调用）</div>
+                    <button class="btn btn-sm" id="aiJudgeBtn" onclick="aiJudge()">判断此竞品与候选是否同一品</button>
+                    <span id="aiJudgeStatus" style="font-size:12px;color:#64748b;margin-left:8px;"></span>
+                    <div id="aiJudgeResult" style="margin-top:8px;font-size:13px;"></div>
+                </div>
+
+                <!-- 手动对应自家品（所有竞品可用，两级搜索：品组 → 规格） -->
+                <div class="align-card" style="margin-top:14px;">
+                    <div style="font-size:14px;font-weight:600;margin-bottom:8px;">✍ 手动对应自家品 <span style="font-size:12px;color:#94a3b8;font-weight:400;">（两级搜索：搜品组 → 点选 → 品内选规格）</span></div>
+                    <div style="color:#64748b;font-size:12px;margin-bottom:8px;">
+                        {% if item.状态 == 'aligned' %}该竞品已对应 <b>{{ item.自家商品名 }}</b>，如需改对应可重新搜索确认。
+                        {% else %}机器没给候选也没关系，您可以自己搜索自家库来对应。{% endif %}
+                    </div>
+                    <div style="display:flex;gap:8px;margin-bottom:8px;">
+                        <input type="text" id="manualKw" placeholder="搜索自家品（名称/品牌/关键词，如「自攻螺丝 M4」）"
+                               style="flex:1;padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;"
+                               onkeydown="if(event.key==='Enter'){manualSearch();}">
+                        <button class="btn btn-sm" onclick="manualSearch()">搜索</button>
+                    </div>
+                    <div id="manualDetail" style="display:none;margin-bottom:10px;"></div>
+                    <div id="manualResults" style="max-height:260px;overflow-y:auto;"></div>
+                    <div id="manualSelected" style="margin-top:8px;font-size:13px;color:#475569;"></div>
+                    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                        <button class="btn btn-success btn-sm" onclick="manualConfirm()" id="manualBtn" disabled title="品+规格同时对应，一步到位">确认对应（品+规格）</button>
+                        <button class="btn btn-sm" onclick="confirmSpuDirect()" id="spuDirectBtn" disabled title="只确认品，规格后补">仅确认此品（粗对齐）</button>
+                        <span id="manualStatus" style="font-size:12px;color:#64748b;"></span>
+                    </div>
+                    <div style="margin-top:14px;border-top:1px dashed #e2e8f0;padding-top:10px;display:flex;align-items:center;gap:8px;">
+                        {% if item.状态 == 'nomatch' %}
+                        <span style="font-size:12px;color:#94a3b8;">已标记无对应</span>
+                        <button class="btn btn-sm" onclick="noMatchToggle(true)">恢复为待处理</button>
+                        {% else %}
+                        <button class="btn btn-sm" onclick="noMatchToggle(false)" title="自家确定没有此品时标记">标记无对应</button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// 一键复制 SKU（19位数字防精度丢失：走文本复制）
+function copySku(sku, btn) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(sku).then(function() {
+            btn.textContent = '✓ 已复制';
+            setTimeout(function(){ btn.textContent = '📋 复制SKU'; }, 1500);
+        }).catch(function() { copySkuFallback(sku, btn); });
+    } else {
+        copySkuFallback(sku, btn);
+    }
+}
+function copySkuFallback(sku, btn) {
+    const ta = document.createElement('textarea');
+    ta.value = sku;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); btn.textContent = '✓ 已复制'; }
+    catch (e) { alert('复制失败，请手动选择复制: ' + sku); }
+    setTimeout(function(){ btn.textContent = '📋 复制SKU'; }, 1500);
+    document.body.removeChild(ta);
+}
+
+// 仅确认品级（写汇总库 SPU 层）
+function confirmSpuOnly(poolIdx, spuName) {
+    if (!poolIdx) { alert('缺少候选品组信息'); return; }
+    if (!confirm('确认此品（粗对齐）？\n规格稍后再补。将写入汇总库 SPU匹配层：' + spuName)) return;
+    fetch('/api/confirm_spu', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({idx: parseInt(poolIdx), spu_gid: '', spu_name: spuName, note: ''})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        alert(d.ok ? d.msg : d.msg);
+        if (d.ok) window.location.reload();
+    })
+    .catch(function(e){ alert('确认失败: ' + e.message); });
+}
+
+// AI 大模型辅助判断（详情页）
+function aiJudge() {
+    const btn = document.getElementById('aiJudgeBtn');
+    const st = document.getElementById('aiJudgeStatus');
+    const box = document.getElementById('aiJudgeResult');
+    btn.disabled = true;
+    st.textContent = '判断中（约5-15秒）...';
+    fetch('/api/ai/match_judge', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shop: {{ item.店铺 | tojson }}, sku: {{ item.Sku_id | tojson }}})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        btn.disabled = false;
+        st.textContent = '';
+        if (!d.ok) { box.innerHTML = '<span style="color:#dc2626;">' + escapeHtml(d.msg || '失败') + '</span>'; return; }
+        const r = d.result;
+        const v = r.verdict;
+        const color = v === '是' ? '#dcfce7' : (v === '否' ? '#fee2e2' : '#fef9c3');
+        const text = v === '是' ? '#166534' : (v === '否' ? '#991b1b' : '#854d0e');
+        let html = '<span style="background:' + color + ';color:' + text + ';padding:2px 10px;border-radius:10px;font-weight:600;">' + escapeHtml(v) + '</span>';
+        if (r.confidence) html += ' <span style="color:#94a3b8;">置信 ' + escapeHtml(String(r.confidence)) + '</span>';
+        if (r.reason) html += '<div style="margin-top:4px;">' + escapeHtml(r.reason) + '</div>';
+        if (r.suggest_own) {
+            html += '<div style="margin-top:6px;">建议对应：' + escapeHtml(r.suggest_own);
+            if (r.suggest_sku) {
+                html += ' <button class="btn btn-sm" onclick="aiApplySuggestion(\'' + r.suggest_sku + '\',this)">采用此建议</button>';
+            }
+            html += '</div>';
+        }
+        box.innerHTML = html;
+    })
+    .catch(function(e){ btn.disabled = false; st.textContent = ''; box.innerHTML = '<span style="color:#dc2626;">请求出错: ' + escapeHtml(e.message) + '</span>'; });
+}
+
+function aiApplySuggestion(ownSku, btn) {
+    if (!confirm('采用大模型建议，将该竞品对应到建议自家品？')) return;
+    btn.disabled = true;
+    fetch('/api/manual_confirm', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shop: {{ item.店铺 | tojson }}, sku: {{ item.Sku_id | tojson }}, own_sku: ownSku, note: '采用大模型建议'})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        alert(d.ok ? d.msg : d.msg);
+        if (d.ok) window.location.reload();
+    })
+    .catch(function(e){ btn.disabled = false; alert('确认失败: ' + e.message); });
+}
+
+let manualSelectedSku = '';
+let manualSelectedName = '';
+
+// 两级搜索 第1级：品组搜索（own_spu_search，与 top50/工作台同款）
+function manualSearch() {
+    const kw = document.getElementById('manualKw').value.trim();
+    if (!kw) { alert('请输入搜索词'); return; }
+    const box = document.getElementById('manualResults');
+    document.getElementById('manualDetail').style.display = 'none';
+    box.innerHTML = '搜索中...';
+    fetch('/api/own_spu_search?q=' + encodeURIComponent(kw))
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+            if (!d.results || !d.results.length) { box.innerHTML = '<div style="color:#94a3b8;padding:8px;">未找到，换个关键词试试</div>'; return; }
+            let html = '<div style="font-size:12px;color:#94a3b8;margin-bottom:6px;">找到 ' + d.results.length + ' 个品组：</div>';
+            d.results.forEach(function(r, i) {
+                const img = r.图片
+                    ? '<img src="' + escapeHtml(r.图片) + '" style="width:40px;height:40px;border-radius:6px;object-fit:cover;border:1px solid #e2e8f0;float:left;margin-right:10px;" onerror="this.style.display=\'none\';">'
+                    : '';
+                html += '<div class="manual-item" id="ms_' + i + '" data-spu="' + escapeHtml(r.品组ID) + '" data-name="' + escapeHtml(r.品名).replace(/"/g, '&quot;') + '" onclick="pickSpu(this, ' + i + ')" style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:5px;cursor:pointer;background:#fff;font-size:13px;overflow:hidden;">'
+                    + img
+                    + '<div style="font-weight:600;color:#1e293b;">' + escapeHtml(r.品名) + '</div>'
+                    + '<div style="font-size:11px;color:#94a3b8;">' + escapeHtml(r.品牌 || '') + ' · ' + escapeHtml(r.类目 || '') + ' · 月销 ' + r.月销合计 + ' · ' + r.规格数 + '规格</div>'
+                    + '</div>';
+            });
+            box.innerHTML = html;
+        })
+        .catch(function(e){ alert('搜索失败: ' + e.message); });
+}
+
+// 两级搜索 第2级：点选品组 → 品组详情（规格筛选词 q 过滤 + 搜索点击日志）
+function pickSpu(el, i) {
+    document.querySelectorAll('.manual-item').forEach(function(x){ x.classList.remove('picked'); x.style.borderColor = '#e2e8f0'; });
+    el.classList.add('picked');
+    el.style.borderColor = '#10b981';
+    const spu = el.getAttribute('data-spu');
+    const kw = document.getElementById('manualKw').value.trim();
+    manualSelectedName = el.getAttribute('data-name');
+    document.getElementById('manualSelected').textContent = '已选品组：' + manualSelectedName + '（请继续在品组卡内点选规格）';
+    document.getElementById('spuDirectBtn').disabled = false;
+    document.getElementById('manualBtn').disabled = true;
+    const box = document.getElementById('manualDetail');
+    box.style.display = 'block';
+    box.innerHTML = '加载品组详情中...';
+    fetch('/api/own_spu_detail?spu=' + encodeURIComponent(spu) + '&q=' + encodeURIComponent(kw) + '&scene=detail')
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+            if (!d.ok) { box.innerHTML = '详情加载失败'; return; }
+            const dd = d.detail;
+            // 品组代表 SKU（月销最高）供「仅确认此品（粗对齐）」；点选具体规格后覆盖
+            const allSkus = dd.SKU列表 || [];
+            if (allSkus.length) {
+                manualSelectedSku = allSkus[0].SKUID;
+                document.getElementById('manualSelected').textContent =
+                    '已选品组：' + manualSelectedName + '（默认代表规格：' + allSkus[0].规格 + '，可在下方点选更换）';
+            }
+            let html = '<div class="own-info-block" style="margin-top:0;">'
+                + '<div class="own-info-title">🏠 品组详情（' + escapeHtml(dd.品名) + ' · ' + dd.规格数 + '规格）</div>';
+            if (dd.图片) {
+                html += '<img src="' + escapeHtml(dd.图片) + '" style="max-width:120px;max-height:120px;border-radius:8px;border:1px solid #e2e8f0;margin:6px 0;" onerror="this.style.display=\'none\';">';
+            }
+            html += '<div class="comp-meta">'
+                + '<span><b>月销合计:</b> ' + dd.月销合计 + '</span>'
+                + '<span><b>售价:</b> ¥' + (dd.售价区间[0] != null ? dd.售价区间[0] + '-' + dd.售价区间[1] : '-') + '</span>'
+                + '<span><b>品牌:</b> ' + escapeHtml(dd.品牌 || '（无）') + '</span>'
+                + '</div>'
+                + '<div class="comp-meta"><span><b>SPU:</b> ' + escapeHtml(dd.品组ID) + '</span></div>';
+            // 规格筛选提示（T8：与 top50 一致的规格词品内筛选）
+            const specWords = dd.规格筛选词 || [];
+            let skuList = dd.SKU列表 || [];
+            if (specWords.length && skuList.length > 1) {
+                const filtered = skuList.filter(function(s){
+                    return specWords.some(function(w){ return String(s.规格 || '').indexOf(w) !== -1; });
+                });
+                html += '<div style="font-size:11px;color:#059669;margin:6px 0;">已按规格词 [' + specWords.map(escapeHtml).join('、') + '] 品内筛选（' + filtered.length + '/' + skuList.length + ' 个规格）</div>';
+                skuList = filtered;
+            }
+            // 规格列表（点选具体 SKU 后可"确认对应（品+规格）"）
+            html += '<div style="font-size:12px;color:#64748b;margin:6px 0 4px;">点选规格（对应到具体自家 SKU）：</div>';
+            skuList.slice(0, 12).forEach(function(s, j) {
+                html += '<div class="spu-sku-item" data-sku="' + escapeHtml(s.SKUID) + '" data-spec="' + escapeHtml(s.规格).replace(/"/g, '&quot;') + '" onclick="pickSku(this)" '
+                    + 'style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:4px;cursor:pointer;background:#fff;font-size:12px;display:flex;justify-content:space-between;">'
+                    + '<span>' + escapeHtml(s.规格) + '</span>'
+                    + '<span style="color:#dc2626;font-weight:600;">¥' + escapeHtml(s.售价) + ' <span style="color:#94a3b8;font-weight:400;">月销' + s.月销 + '</span></span>'
+                    + '</div>';
+            });
+            html += '</div>';
+            box.innerHTML = html;
+        })
+        .catch(function(e){ box.innerHTML = '加载出错: ' + e.message; });
+}
+
+// 点选具体规格（SKU）：启用"确认对应（品+规格）"
+function pickSku(el) {
+    document.querySelectorAll('.spu-sku-item').forEach(function(x){ x.style.borderColor = '#e2e8f0'; x.style.background = '#fff'; });
+    el.style.borderColor = '#10b981';
+    el.style.background = '#ecfdf5';
+    manualSelectedSku = el.getAttribute('data-sku');
+    document.getElementById('manualSelected').textContent = '已选择：' + manualSelectedName + ' / ' + el.getAttribute('data-spec') + '（' + manualSelectedSku + '）';
+    document.getElementById('manualBtn').disabled = false;
+}
+
+// 仅确认此品时用品组代表：品组点选后取品组内月销最高 SKU
+function pickManual(el) { pickSpu(el, 0); }
+
+function manualConfirm() {
+    if (!manualSelectedSku) { alert('请先搜索并选择自家品'); return; }
+    if (!confirm('确认将该竞品对应到自家品：' + manualSelectedName + '？')) return;
+    const btn = document.getElementById('manualBtn');
+    const st = document.getElementById('manualStatus');
+    btn.disabled = true; st.textContent = '正在写入...';
+    fetch('/api/manual_confirm', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shop: {{ item.店铺 | tojson }}, sku: {{ item.Sku_id | tojson }}, own_sku: manualSelectedSku})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        st.textContent = '';
+        if (d.ok) { alert(d.msg); window.location.reload(); }
+        else { alert('对应失败: ' + d.msg); btn.disabled = false; }
+    })
+    .catch(function(e){ st.textContent = ''; btn.disabled = false; alert('请求出错: ' + e.message); });
+}
+
+// 仅确认此品（粗对齐）：只写 SPU 层，规格后补
+function confirmSpuDirect() {
+    if (!manualSelectedSku) { alert('请先搜索并选择自家品'); return; }
+    if (!confirm('仅确认此品（粗对齐）：\n只把品对应到所选自家品，规格稍后再补？')) return;
+    const btn = document.getElementById('spuDirectBtn');
+    const st = document.getElementById('manualStatus');
+    btn.disabled = true; st.textContent = '正在写入...';
+    fetch('/api/confirm_spu_direct', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shop: {{ item.店铺 | tojson }}, sku: {{ item.Sku_id | tojson }}, own_sku: manualSelectedSku})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        st.textContent = '';
+        if (d.ok) { alert(d.msg); window.location.reload(); }
+        else { alert('确认失败: ' + d.msg); btn.disabled = false; }
+    })
+    .catch(function(e){ st.textContent = ''; btn.disabled = false; alert('请求出错: ' + e.message); });
+}
+
+// 标记无对应 / 恢复
+function noMatchToggle(restore) {
+    if (!restore && !confirm('确认该竞品在自家没有对应商品？\n标记后可从列表「恢复/重查」找回。')) return;
+    fetch('/api/no_match_direct', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({shop: {{ item.店铺 | tojson }}, sku: {{ item.Sku_id | tojson }}, restore: restore})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+        alert(d.ok ? d.msg : d.msg);
+        if (d.ok) window.location.reload();
+    })
+    .catch(function(e){ alert('操作失败: ' + e.message); });
+}
+</script>
+</body>
+</html>
