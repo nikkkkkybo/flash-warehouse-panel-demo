@@ -1986,10 +1986,12 @@ def dashboard():
         # P0.3 范围联动：自家选项携带当前竞店范围（区/多选勾选/全部）
         own_carry = "&zone=" + quote(zone['name']) + "".join("&inc=" + quote(s) for s in zone_inc)
         # 区/多选视图的 AI 建议：合并所选店的建议（最多 5 家，50 条），跳转各回自己店
-        advice_z, _adv = [], {"rows": [], "stale": False, "at": ""}
+        advice_z, _adv = [], {"rows": [], "stale": False, "at": "", "src": "未生成"}
         for s in (zone_inc or zone.get("comp_shops", []))[:5]:
             _st = advice_state(s)
             _adv["rows"] += _st["rows"]
+            if _st["rows"] and _adv["src"] == "未生成":
+                _adv["src"] = _st["src"]
             if _st["stale"] and not _adv["stale"]:
                 _adv["stale"], _adv["at"] = True, _st["at"]
             advice_z += _advice_view(s, _st["rows"])

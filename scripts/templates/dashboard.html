@@ -526,6 +526,12 @@
             （真模型约 0.02-0.05 元，演示模式 0 元）。</div>
     </div>
     {% endif %}
+    {% if not advice and not advice_stale %}
+    <div class="dash-section" style="margin-top:16px;">
+        <div class="empty-opp">💡 这里还没有 AI 建议（不是加载失败）。点右上「✨ 生成 AI 建议」为前50品逐条出建议
+            ——真模型约 0.02-0.05 元，演示模式 0 元；生成后会存盘，重启面板或切回本店都不用再花第二次。</div>
+    </div>
+    {% endif %}
     {% if advice %}
     <div class="dash-section" style="margin-top:16px;">
         <div class="sec-head"><span class="sec-title">💡 AI 建议（前50品，逐条 ≤20字）</span>

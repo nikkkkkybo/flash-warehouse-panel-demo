@@ -120,6 +120,14 @@
     </div>
     {% endif %}
 
+    {% if not advice and not advice_stale %}
+    <div class="dash-section" style="background:#fff;border-radius:12px;padding:18px 22px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:16px;">
+        <div class="sec-head" style="margin-bottom:10px;"><span style="font-size:16px;font-weight:600;">🤖 AI 建议（还没生成）</span></div>
+        <div class="sub">这里空着不是加载失败。点上面「✨ 生成 AI 建议」为这前50品逐条出建议
+            ——真模型约 0.02-0.05 元，演示模式 0 元；生成后会存盘，重启面板或切回本店都不用再花第二次。</div>
+    </div>
+    {% endif %}
+
     {% if advice %}
     <!-- AI 建议结果 -->
     <div class="dash-section" style="background:#fff;border-radius:12px;padding:18px 22px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:16px;">
