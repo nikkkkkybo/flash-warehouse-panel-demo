@@ -112,12 +112,20 @@
         <div class="sub" style="margin-top:6px;">按竞品月售排序取前50个品（同规格归组）。点开 → 右侧搜索自家品 → 人工确认对应；无对应的点「确认无对应」——匹配完成后可一键生成 AI 建议（有对应→优化，无对应→上新）。</div>
     </header>
 
+    {% if advice_stale and not advice %}
+    <div class="dash-section" style="background:#fff;border-radius:12px;padding:18px 22px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:16px;">
+        <div class="sec-head" style="margin-bottom:10px;"><span style="font-size:16px;font-weight:600;">🤖 AI 建议已过期</span></div>
+        <div class="sub">上次生成于 {{ advice_at or '（时间未知）' }}，此后榜单、人工对应或建议算法有变化——旧结论不再当现状展示。
+            要更新请点上面「✨ 生成 AI 建议」重算一次（真模型约 0.02-0.05 元，演示模式 0 元）。</div>
+    </div>
+    {% endif %}
+
     {% if advice %}
     <!-- AI 建议结果 -->
     <div class="dash-section" style="background:#fff;border-radius:12px;padding:18px 22px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:16px;">
         <div class="sec-head" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:10px;border-bottom:2px solid #f1f5f9;">
             <span style="font-size:16px;font-weight:600;">🤖 AI 建议（{{ advice|length }} 条）</span>
-            <span style="font-size:12px;color:#94a3b8;">手动触发生成；完整版见 output/top50_Ai建议_{{ current_shop }}.xlsx</span>
+            <span style="font-size:12px;color:#94a3b8;">{% if advice_at %}生成于 {{ advice_at }}（已存盘，重启不用再花一次钱）；{% endif %}手动触发生成；完整版见 output/top50_Ai建议_{{ current_shop }}.xlsx</span>
         </div>
         <table class="candidate-table">
             <thead><tr><th>排名</th><th>品名</th><th>状态</th><th>竞品月售</th><th>自家对应</th><th>AI 建议</th></tr></thead>

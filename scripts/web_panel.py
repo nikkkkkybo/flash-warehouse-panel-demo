@@ -280,6 +280,63 @@ def _derived(kind, shop, builder, code=None):
     return payload
 
 
+_fp_advice_cache = {}
+
+
+def _advice_code_fp():
+    """建议链算法指纹：改了提示词/建议组装/销量口径，旧建议就该判过期。"""
+    if "v" not in _fp_advice_cache:
+        import ai_top50
+        import assistant_brain
+        import summary_library
+        import sales_text
+        _fp_advice_cache["v"] = _code_fp(ai_top50, assistant_brain, summary_library, sales_text)
+    return _fp_advice_cache["v"]
+
+
+def _advice_deps(shop):
+    """建议的可信边界 = build_summary 真正读到的东西（榜单源表 + 自家表 + 人工确认 + 汇总库）。"""
+    import summary_library
+    return (_derived_deps(shop, "top500")
+            + [OWN_FILE, PROGRESS_FILE, summary_library.LIBRARY_FILE])
+
+
+def _advice_slot(shop):
+    return "advice_top50_" + shop
+
+
+def advice_state(shop):
+    """AI 建议三层取数：内存 → 磁盘快照（指纹一致才算现行结论）→ 空。
+
+    和 _derived() 的唯一区别是**这里绝不现场调模型**：调模型要花钱，必须人点按钮。
+    所以快照过期时只回 stale + 上次生成时间，不回旧行——页面宁可显示"已过期，请重新生成"，
+    也不能把上一轮数据算出的建议当成现状。
+    """
+    deps = _advice_deps(shop)
+    fp = _snap.key_of(deps, _advice_code_fp())
+    slot = _advice_slot(shop)
+    if shop in _top50_advice_cache:
+        return {"rows": _top50_advice_cache[shop], "stale": False, "at": "", "src": "内存"}
+    rows = _snap.load(slot, fp)
+    if rows is not None:
+        _top50_advice_cache[shop] = rows
+        return {"rows": rows, "stale": False,
+                "at": (_snap.peek(slot) or {}).get("built_at", ""), "src": "快照"}
+    meta = _snap.peek(slot) or {}
+    if meta.get("fingerprint") and meta.get("fingerprint") != fp:
+        return {"rows": [], "stale": True, "at": meta.get("built_at", ""), "src": "过期"}
+    return {"rows": [], "stale": False, "at": "", "src": "未生成"}
+
+
+def remember_advice(shop, rows):
+    """生成成功后落盘：重启、切店、无关写库都不必再花一次模型钱。"""
+    _top50_advice_cache[shop] = rows
+    deps = _advice_deps(shop)
+    fp = _snap.key_of(deps, _advice_code_fp())
+    _snap.store(_advice_slot(shop), fp, rows, deps=deps, note="AI建议(top50)")
+    return fp
+
+
 def _load_multi_shop_pool():
     """扫描 output/试跑_<店>/对齐_人工确认池.xlsx 自动合并（加 竞店名称/__rowid 列）；
     无试跑目录时回退单店文件（默认店），兼容旧单店链路。"""
@@ -1929,9 +1986,13 @@ def dashboard():
         # P0.3 范围联动：自家选项携带当前竞店范围（区/多选勾选/全部）
         own_carry = "&zone=" + quote(zone['name']) + "".join("&inc=" + quote(s) for s in zone_inc)
         # 区/多选视图的 AI 建议：合并所选店的建议（最多 5 家，50 条），跳转各回自己店
-        advice_z = []
+        advice_z, _adv = [], {"rows": [], "stale": False, "at": ""}
         for s in (zone_inc or zone.get("comp_shops", []))[:5]:
-            advice_z += _advice_view(s, _top50_advice_cache.get(s, []))
+            _st = advice_state(s)
+            _adv["rows"] += _st["rows"]
+            if _st["stale"] and not _adv["stale"]:
+                _adv["stale"], _adv["at"] = True, _st["at"]
+            advice_z += _advice_view(s, _st["rows"])
         advice_z = advice_z[:50]
         scope_bar = build_scope_bar("/", comp_active=zone_name, own_active=own_store,
                                     keep=("filter", "q"), zones=zones_all,
@@ -1945,7 +2006,8 @@ def dashboard():
             rank_rows=[], rank_stats=zstats,
             rank_loading=False, prod_ready=prod_ready,
             page=page, total_pages=ztotal_pages, page_size=PAGE_SIZE,
-            advice=advice_z, pool_keys=_pool_keys,
+            advice=advice_z, advice_stale=_adv["stale"], advice_at=_adv["at"],
+            pool_keys=_pool_keys,
             zone=zone, zones=zones_all, zone_rows=zrows,
             zone_shops=zrank.get("shops", []),
             zone_inc=zone_inc, zqs=zqs, scope_bar=scope_bar,
@@ -2135,8 +2197,9 @@ def dashboard():
         rank_loading = True
         total_pages = 1
         page = 1
-    # AI 建议：跳转按代表 SKU 直达竞品详情（见 _advice_view）
-    advice_view = _advice_view(shop, _top50_advice_cache.get(shop, []))
+    # AI 建议：跳转按代表 SKU 直达竞品详情（见 _advice_view）；取数走 advice_state（内存→快照）
+    _adv = advice_state(shop)
+    advice_view = _advice_view(shop, _adv["rows"])
     _dbg.append(("pre_render", _t.time()))
     _dbg_total = _dbg[-1][1] - _dbg[0][1]
     if _dbg_total > 0.5:
@@ -2159,7 +2222,8 @@ def dashboard():
                            rank_rows=rank_rows, rank_stats=rank_stats,
                            rank_loading=rank_loading, prod_ready=prod_ready,
                            page=page, total_pages=total_pages, page_size=PAGE_SIZE,
-                           advice=advice_view, pool_keys=_pool_keys,
+                           advice=advice_view, advice_stale=_adv["stale"],
+                           advice_at=_adv["at"], pool_keys=_pool_keys,
                            zone=None, zones=zones_all, zone_rows=[], zone_shops=[],
                            zone_inc=[], zqs="", scope_bar=scope_bar,
                            changes=_import_changes_summary(),
@@ -4288,8 +4352,10 @@ def _legacy_compare_page():
                 p["状态"] = "无对应"
             else:
                 p["状态"] = "待匹配"
+        _adv50 = advice_state(shop)
         return render_template("top50.html", products=prods, matched=matched,
-                               advice=_top50_advice_cache.get(shop, []),
+                               advice=_adv50["rows"], advice_stale=_adv50["stale"],
+                               advice_at=_adv50["at"],
                                current_shop=shop, view=view,
                                shops=[{"name": s} for s in competitor_lookup.keys()])
 
@@ -4914,7 +4980,7 @@ def api_top50_advice():
         except Exception as e:
             print("[AI建议] 取缓存榜单失败，改现算:", e)
         result, infos = generate_advice(shop, mock=mock, prods=prods)
-        _top50_advice_cache[shop] = result
+        remember_advice(shop, result)
         path = ""
         try:
             path = save_advice_excel(shop, result)

@@ -517,10 +517,19 @@
         {% endif %}
     </div>
 
-    <!-- AI 建议结果（生成后展示） -->
+    <!-- AI 建议结果（生成后展示；过期只提示不展示旧结论） -->
+    {% if advice_stale and not advice %}
+    <div class="dash-section" style="margin-top:16px;">
+        <div class="sec-head"><span class="sec-title">💡 AI 建议已过期</span></div>
+        <div class="empty-opp">上次生成于 {{ advice_at or '（时间未知）' }}，此后榜单、人工对应或建议算法有变化——
+            旧结论不再当现状展示（免得拿过期判断去选品）。要更新请点右上「✨ 生成 AI 建议」重算一次
+            （真模型约 0.02-0.05 元，演示模式 0 元）。</div>
+    </div>
+    {% endif %}
     {% if advice %}
     <div class="dash-section" style="margin-top:16px;">
         <div class="sec-head"><span class="sec-title">💡 AI 建议（前50品，逐条 ≤20字）</span>
+            {% if advice_at %}<span style="font-size:11.5px;color:#94a3b8;margin-left:8px;">生成于 {{ advice_at }}（已存盘，重启不用再花一次钱）</span>{% endif %}
             <span style="font-size:11.5px;color:#94a3b8;margin-left:8px;">标 <small style="color:#7c3aed;">(意向)</small> 的是"人想买"收藏量：按权重折进有效销量参与判定，不当成交笔数看</span></div>
         <table class="advice-tbl">
             <thead><tr><th>#</th><th>品名（点开看对照）</th><th>状态</th><th>竞品月售</th><th>自家品</th><th>建议</th></tr></thead>
